@@ -79,3 +79,4 @@ Service accounts need edit access to the DR / Tasks spreadsheets. Slack OAuth sc
 - SlackのユーザーIDを併記する場合は `USER_SLUG_OF_SLACK` に追記すると、表示名変更に影響されずに突合できます。
 - 推奨スラッグ: 小文字英数＋ハイフン（例: `sei-mei`）。迷う場合はメールアドレスの`@`前を小文字化すればOKです。
 // trigger vercel build
+// trigger vercel build
