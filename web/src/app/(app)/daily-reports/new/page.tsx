@@ -5,6 +5,16 @@ import type { ChangeEvent, FormEvent } from "react";
 import type { Session } from "next-auth";
 import { getReportWeekdayCode, reportDateBy29hRule } from "@/lib/time";
 
+type AutoMeta = {
+  date: string;
+  weekday: string;
+  name: string;
+  email: string;
+  slackUserId?: string;
+  slackTeamId?: string;
+  channelId: string;
+};
+
 type FormState = {
   satisfactionToday: string;
   doneToday: string;
@@ -63,16 +73,19 @@ export default function DailyReportNewPage() {
     return { iso: dateISO, weekday, isPreviousDay };
   }, []);
 
-  const autoMeta = useMemo(() => {
+  const autoMeta = useMemo<AutoMeta>(() => {
+    const sessionWithSlack = session as
+      | (Session & { slackUserId?: unknown; slackTeamId?: unknown })
+      | null;
     const slackUserId =
-      typeof (session as Record<string, unknown> | null)?.slackUserId === "string"
-        ? (session as Record<string, unknown>).slackUserId
-        : "";
+      typeof sessionWithSlack?.slackUserId === "string"
+        ? sessionWithSlack.slackUserId
+        : undefined;
     const slackTeamId =
-      typeof (session as Record<string, unknown> | null)?.slackTeamId === "string"
-        ? (session as Record<string, unknown>).slackTeamId
-        : "";
-    const channelId = "C0957N7D0MP";
+      typeof sessionWithSlack?.slackTeamId === "string"
+        ? sessionWithSlack.slackTeamId
+        : undefined;
+
     return {
       date: currentDate.iso,
       weekday: currentDate.weekday,
@@ -80,7 +93,7 @@ export default function DailyReportNewPage() {
       email: session?.user?.email ?? "",
       slackUserId,
       slackTeamId,
-      channelId,
+      channelId: "C0957N7D0MP",
     };
   }, [session, currentDate]);
 
@@ -181,11 +194,11 @@ export default function DailyReportNewPage() {
           </div>
           <div>
             <dt className="font-medium text-slate-500">Slack ユーザーID</dt>
-            <dd>{autoMeta.slackUserId || "-"}</dd>
+            <dd>{autoMeta.slackUserId ?? "-"}</dd>
           </div>
           <div>
             <dt className="font-medium text-slate-500">Slack チームID</dt>
-            <dd>{autoMeta.slackTeamId || "-"}</dd>
+            <dd>{autoMeta.slackTeamId ?? "-"}</dd>
           </div>
           <div>
             <dt className="font-medium text-slate-500">投稿チャンネル</dt>
