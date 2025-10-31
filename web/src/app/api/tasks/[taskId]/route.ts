@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   _request: NextRequest,
-  context: { params: { taskId: string } },
+  context: { params: Promise<{ taskId: string }> },
 ) {
   const { taskId } = await context.params;
   const tasks = await listTasks();
@@ -27,7 +27,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: { taskId: string } },
+  context: { params: Promise<{ taskId: string }> },
 ) {
   const { taskId } = await context.params;
   const body = await request.json();
