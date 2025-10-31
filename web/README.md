@@ -80,3 +80,4 @@ Service accounts need edit access to the DR / Tasks spreadsheets. Slack OAuth sc
 - 推奨スラッグ: 小文字英数＋ハイフン（例: `sei-mei`）。迷う場合はメールアドレスの`@`前を小文字化すればOKです。
 // trigger vercel build
 // trigger vercel build
+// trigger vercel build
