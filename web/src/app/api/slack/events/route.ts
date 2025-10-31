@@ -1,51 +1,85 @@
+// web/src/app/api/slack/events/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
-const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET!;
+export const runtime = "nodejs"; // Slack署名検証でNodeのcryptoを使用
+export const dynamic = "force-dynamic";
 
-function verifySlackSignature(req: NextRequest, body: string) {
-  const timestamp = req.headers.get("x-slack-request-timestamp");
-  const sig = req.headers.get("x-slack-signature");
+const MAX_AGE_SECONDS = 60 * 5;
 
-  if (!timestamp || !sig) return false;
+function ok(data: unknown = { ok: true }) {
+  return NextResponse.json(data);
+}
+function badRequest(msg = "bad_request") {
+  return NextResponse.json({ ok: false, error: msg }, { status: 400 });
+}
+function unauthorized(msg = "unauthorized") {
+  return NextResponse.json({ ok: false, error: msg }, { status: 401 });
+}
 
-  const fiveMinutesAgo = Math.floor(Date.now() / 1000) - 60 * 5;
-  if (Number(timestamp) < fiveMinutesAgo) return false;
+function safeJson<T>(s: string): T | null {
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    return null;
+  }
+}
 
-  const base = `v0:${timestamp}:${body}`;
-  const hmac = crypto.createHmac("sha256", SLACK_SIGNING_SECRET);
-  hmac.update(base, "utf8");
-  const computed = `v0=${hmac.digest("hex")}`;
+function verifySlackSignature(
+  bodyRaw: string,
+  ts: string | null,
+  sig: string | null,
+  signingSecret: string | undefined
+): boolean {
+  if (!ts || !sig || !signingSecret) return false;
 
-  return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(sig));
+  const tsNum = Number(ts);
+  if (!Number.isFinite(tsNum)) return false;
+  const age = Math.abs(Date.now() / 1000 - tsNum);
+  if (age > MAX_AGE_SECONDS) return false;
+
+  const base = `v0:${ts}:${bodyRaw}`;
+  const hmac = createHmac("sha256", signingSecret).update(base).digest("hex");
+  const expected = `v0=${hmac}`;
+
+  const a = Buffer.from(sig, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+export function GET() {
+  return ok({ ok: true });
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const bodyText = await req.text();
-    const body = JSON.parse(bodyText);
+  const signingSecret = process.env.SLACK_SIGNING_SECRET;
 
-    // ✅ Slack challenge を返す（必須）
-    if (body.type === "url_verification" && body.challenge) {
-      return NextResponse.json({ challenge: body.challenge });
-    }
+  const sig = req.headers.get("x-slack-signature");
+  const ts = req.headers.get("x-slack-request-timestamp");
+  const bodyRaw = await req.text();
 
-    // ✅ セキュリティ：署名チェック
-    if (!verifySlackSignature(req, bodyText)) {
-      console.error("Slack signature verification failed");
-      return NextResponse.json({ error: "invalid signature" }, { status: 401 });
-    }
-
-    // ✅ イベント受信ログ
-    console.log("SLACK_EVENT_HIT", {
-      retryNum: req.headers.get("x-slack-retry-num"),
-      retryReason: req.headers.get("x-slack-retry-reason"),
-      eventType: body?.type,
-    });
-
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("Slack event error:", err);
-    return NextResponse.json({ error: "internal error" }, { status: 500 });
+  const probe = safeJson<any>(bodyRaw);
+  if (probe?.type === "url_verification" && probe?.challenge) {
+    return NextResponse.json({ challenge: probe.challenge });
   }
+
+  if (!verifySlackSignature(bodyRaw, ts, sig, signingSecret)) {
+    return unauthorized("invalid_signature");
+  }
+
+  const evt = probe;
+  if (!evt || evt.type !== "event_callback") {
+    return ok();
+  }
+
+  (async () => {
+    try {
+      console.log("Slack event (background):", evt?.event?.type, evt?.event);
+    } catch (e) {
+      console.error("Slack event handler error:", e);
+    }
+  })();
+
+  return ok();
 }
