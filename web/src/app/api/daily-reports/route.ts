@@ -67,7 +67,6 @@ export async function POST(request: Request) {
   const sessionEmail = toStringOrEmpty(session.user.email);
   const slackUserId = toStringOrEmpty(session.user.slackUserId);
   const slackTeamId = toStringOrEmpty(session.user.slackTeamId);
-  const slackUserAccessTokenRaw = "";
 
   const normalizeSlugCandidate = (input: string): string =>
     input
@@ -102,10 +101,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const userToken =
-    slackUserAccessTokenRaw && slackUserAccessTokenRaw.trim()
-      ? slackUserAccessTokenRaw.trim()
-      : null;
+  const userToken = null;
 
   console.info("dr.api.save.intent", {
     haveUserToken: Boolean(userToken),
