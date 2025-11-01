@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node ./scripts/patch-next-auth.js"
   },
   "dependencies": {
     "@slack/events-api": "3.0.1",
