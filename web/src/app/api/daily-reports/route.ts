@@ -64,15 +64,9 @@ export async function POST(request: Request) {
 
   const sessionUserName = toStringOrEmpty(session.user.name);
   const sessionEmail = toStringOrEmpty(session.user.email);
-  const slackUserId = session.slackUserId ?? toStringOrEmpty(
-    (session as Record<string, unknown>).slackUserId,
-  );
-  const slackTeamId = session.slackTeamId ?? toStringOrEmpty(
-    (session as Record<string, unknown>).slackTeamId,
-  );
-  const slackUserAccessTokenRaw = session.slackUserAccessToken ?? toStringOrEmpty(
-    (session as Record<string, unknown>).slackUserAccessToken,
-  );
+  const slackUserId = session.slackUserId ?? "";
+  const slackTeamId = session.slackTeamId ?? "";
+  const slackUserAccessTokenRaw = session.slackUserAccessToken ?? "";
 
   const normalizeSlugCandidate = (input: string): string =>
     input
