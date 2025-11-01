@@ -10,6 +10,7 @@ export const DR_TAGS = {
 
 export type DrFields = {
   date: string;
+  dateISO?: string;
   userName: string;
   satisfaction: string;
   done: string;
