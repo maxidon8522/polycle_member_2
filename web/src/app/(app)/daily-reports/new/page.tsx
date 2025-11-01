@@ -74,16 +74,13 @@ export default function DailyReportNewPage() {
   }, []);
 
   const autoMeta = useMemo<AutoMeta>(() => {
-    const sessionWithSlack = session as
-      | (Session & { slackUserId?: unknown; slackTeamId?: unknown })
-      | null;
     const slackUserId =
-      typeof sessionWithSlack?.slackUserId === "string"
-        ? sessionWithSlack.slackUserId
+      typeof session?.user?.slackUserId === "string"
+        ? session.user.slackUserId
         : undefined;
     const slackTeamId =
-      typeof sessionWithSlack?.slackTeamId === "string"
-        ? sessionWithSlack.slackTeamId
+      typeof session?.user?.slackTeamId === "string"
+        ? session.user.slackTeamId
         : undefined;
 
     return {
