@@ -148,20 +148,25 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.sub ?? "";
-        session.user.slackUserId = token.slackUserId ?? null;
-        session.user.slackAccessToken = token.slackUserAccessToken ?? null;
-      }
+      const slackUserId = token.slackUserId ?? "";
+      const slackTeamId = token.slackTeamId ?? "";
+      const slackUserAccessToken = token.slackUserAccessToken ?? "";
 
-      (session as Record<string, unknown>).slackUserId =
-        token.slackUserId ?? "";
-      (session as Record<string, unknown>).slackTeamId =
-        token.slackTeamId ?? "";
-      (session as Record<string, unknown>).slackUserAccessToken =
-        token.slackUserAccessToken ?? "";
-
-      return session;
+      return {
+        ...session,
+        user: session.user
+          ? {
+              ...session.user,
+              id: token.sub ?? session.user.id ?? "",
+              slackUserId: slackUserId || null,
+              slackAccessToken: slackUserAccessToken || null,
+              slackTeamId: slackTeamId || null,
+            }
+          : session.user,
+        slackUserId,
+        slackTeamId,
+        slackUserAccessToken,
+      };
     },
   },
 };
