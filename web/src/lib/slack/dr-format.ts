@@ -9,16 +9,16 @@ export const DR_TAGS = {
 } as const;
 
 export type DrFields = {
-  date: string;
+  date?: string;
   dateISO?: string;
-  userName: string;
-  satisfaction: string;
-  done: string;
-  good: string;
-  moreNext: string;
-  todoTomorrow: string;
-  wishTomorrow: string;
-  personalNews: string;
+  userName?: string;
+  satisfaction?: string;
+  done?: string;
+  good?: string;
+  moreNext?: string;
+  todoTomorrow?: string;
+  wishTomorrow?: string;
+  personalNews?: string;
   tomorrowTasks?: string;
   nonTask?: string;
 };
