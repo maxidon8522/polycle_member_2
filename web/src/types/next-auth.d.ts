@@ -1,5 +1,7 @@
+import { DefaultSession } from "next-auth";
+
 declare module "next-auth" {
-  interface Session {
+  interface Session extends DefaultSession {
     slackUserId?: string | null;
     slackTeamId?: string | null;
     slackUserAccessToken?: string | null;
