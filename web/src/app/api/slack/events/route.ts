@@ -39,7 +39,7 @@ export async function POST(req: Request) {
 
   if (
     !verifySlackSignature({
-      signingSecret: env.SLACK_SIGNING_SECRET,
+      signingSecret: env.server.SLACK_SIGNING_SECRET,
       body: raw,
       timestamp: ts,
       signature: sig,
