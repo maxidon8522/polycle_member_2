@@ -13,6 +13,16 @@ export const DEPARTMENT_OF_USER: Record<string, Department> = {
 export const USER_SLUG_OF_SLACK: Record<string, string> = {
   // "U0ABCDEF12": "yamamoto",
   "U09HVFPNX1P": "murakami",
+  "U09A5ENUWP9": "hello polycle",
+  "U0979RZ6K41": "Otsuka Himawari",
+  "U08GT7K93N0": "Yokoe Hinami",
+  "U08H513206S": "Imamura Hinano",
+  "U09AW7GCSD7": "Ikeda Hiromasa",
+  "U095GPQQCEA": "Nakashima Umi",
+  "U0954G9B9HC": "Matsushima Rin",
+  "U095CN00HGU": "Nakamine Rin",
+  "U095792SGAW": "Abe Shinnosuke",
+  "U05DZ52MLBY": "Mizoguchi Yuki"
 };
 
 export function resolveUserSlug(input: {
