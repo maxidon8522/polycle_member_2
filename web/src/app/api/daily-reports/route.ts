@@ -41,14 +41,14 @@ export async function POST(request: Request) {
   const wishTomorrow = toStringOrEmpty(body.wishTomorrow);
   const personalNews = toStringOrEmpty(body.personalNews);
 
-  const tagsRaw = Array.isArray(body.tags)
+  const tagsRaw: unknown[] = Array.isArray(body.tags)
     ? body.tags
     : toStringOrEmpty(body.tags).split(" ");
   const tags = Array.from(
     new Set(
       tagsRaw
-        .filter((tag): tag is string => typeof tag === "string")
-        .map((tag) => tag.replace(/^#/, "").trim())
+        .filter((tag: unknown): tag is string => typeof tag === "string")
+        .map((tag: string) => tag.replace(/^#/, "").trim())
         .filter(Boolean),
     ),
   );
@@ -65,15 +65,9 @@ export async function POST(request: Request) {
 
   const sessionUserName = toStringOrEmpty(session.user.name);
   const sessionEmail = toStringOrEmpty(session.user.email);
-  const slackUserId = session.slackUserId ?? toStringOrEmpty(
-    (session as Record<string, unknown>).slackUserId,
-  );
-  const slackTeamId = session.slackTeamId ?? toStringOrEmpty(
-    (session as Record<string, unknown>).slackTeamId,
-  );
-  const slackUserAccessTokenRaw = session.slackUserAccessToken ?? toStringOrEmpty(
-    (session as Record<string, unknown>).slackUserAccessToken,
-  );
+  const slackUserId = session.slackUserId ?? "";
+  const slackTeamId = session.slackTeamId ?? "";
+  const slackUserAccessTokenRaw = session.slackUserAccessToken ?? "";
 
   const normalizeSlugCandidate = (input: string): string =>
     input
