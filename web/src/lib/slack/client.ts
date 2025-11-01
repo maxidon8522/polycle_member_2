@@ -1,4 +1,5 @@
 import { WebClient, LogLevel } from "@slack/web-api";
+import type { Block, KnownBlock } from "@slack/web-api";
 import { env } from "@/config/env";
 import { DailyReport } from "@/types";
 import {
@@ -128,10 +129,14 @@ export const postDailyReportToSlack = async (
     });
 
     try {
+      const safeBlocks: (Block | KnownBlock)[] | undefined = Array.isArray(payload.blocks)
+        ? (payload.blocks as unknown as (Block | KnownBlock)[])
+        : undefined;
+
       const response = await client.chat.postMessage({
         channel: channelId,
         text: payload.text,
-        blocks: payload.blocks,
+        blocks: safeBlocks,
         thread_ts: options.threadTs,
       });
       const responseMetadata = (response as {
