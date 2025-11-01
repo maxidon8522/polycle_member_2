@@ -19,6 +19,7 @@ export type DrFields = {
   wishTomorrow: string;
   personalNews: string;
   tomorrowTasks?: string;
+  nonTask?: string;
 };
 
 export function formatDailyReportMessage(f: DrFields): string {
