@@ -10,10 +10,10 @@ export const DEPARTMENT_OF_USER: Record<string, Department> = {
 };
 
 // 2) 任意: SlackユーザーID → userSlug
-export const USER_SLUG_OF_SLACK = {
+export const USER_SLUG_OF_SLACK: Record<string, string> = {
   // "U0ABCDEF12": "yamamoto",
   "U09HVFPNX1P": "murakami",
-} as const satisfies Record<string, string>;
+};
 
 export function resolveUserSlug(input: {
   userSlug?: string | null;
