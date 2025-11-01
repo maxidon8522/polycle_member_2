@@ -18,6 +18,7 @@ export type DrFields = {
   todoTomorrow: string;
   wishTomorrow: string;
   personalNews: string;
+  tomorrowTasks?: string;
 };
 
 export function formatDailyReportMessage(f: DrFields): string {
