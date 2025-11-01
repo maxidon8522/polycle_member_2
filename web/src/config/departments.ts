@@ -1,13 +1,13 @@
 export type Department = "A" | "B" | "C" | "D" | "E";
 
 // 1) 社内の一意キー: userSlug → 部署
-export const DEPARTMENT_OF_USER = {
+export const DEPARTMENT_OF_USER: Record<string, Department> = {
   yamamoto: "A",
   tanaka: "B",
   hoshikawa: "C",
   murakami: "A",
   // ここに追記していく
-} as const satisfies Record<string, Department>;
+};
 
 // 2) 任意: SlackユーザーID → userSlug
 export const USER_SLUG_OF_SLACK = {
