@@ -42,12 +42,16 @@ export interface SlackPostResult {
 }
 
 const toDrFields = (report: DailyReport): DrFields => ({
+  date: report.date,
+  userName: report.userName ?? "",
   satisfaction: report.satisfactionToday ?? "",
   done: report.doneToday ?? "",
   good: report.goodMoreBackground ?? "",
   moreNext: report.moreNext ?? "",
   tomorrowTasks: report.todoTomorrow ?? "",
+  todoTomorrow: report.todoTomorrow ?? "",
   nonTask: report.wishTomorrow ?? "",
+  wishTomorrow: report.wishTomorrow ?? "",
   personalNews: report.personalNews ?? "",
   dateISO: report.date,
 });

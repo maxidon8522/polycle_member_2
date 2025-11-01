@@ -23,18 +23,48 @@ export type DrFields = {
   nonTask?: string;
 };
 
-export function formatDailyReportMessage(f: DrFields): string {
+export function formatDailyReportMessage(f: DrFields): {
+  text: string;
+  blocks: Array<Record<string, unknown>>;
+} {
+  const safe = {
+    date: f.date ?? f.dateISO ?? "",
+    userName: f.userName ?? "",
+    satisfaction: f.satisfaction ?? "",
+    done: f.done ?? "",
+    good: f.good ?? "",
+    moreNext: f.moreNext ?? "",
+    todoTomorrow: f.todoTomorrow ?? f.tomorrowTasks ?? "",
+    wishTomorrow: f.wishTomorrow ?? f.nonTask ?? "",
+    personalNews: f.personalNews ?? "",
+  };
+
   const head = [
-    `${DR_TAGS.satisfaction}\n${f.satisfaction}`,
-    `${DR_TAGS.done}\n${bulletize(f.done)}`,
-    `${DR_TAGS.good}\n${bulletize(f.good)}`,
-    `${DR_TAGS.moreNext}\n${bulletize(f.moreNext)}`,
-    `${DR_TAGS.todoTomorrow}\n${bulletize(f.todoTomorrow)}`,
-    `${DR_TAGS.wishTomorrow}\n${bulletize(f.wishTomorrow)}`,
-    `${DR_TAGS.personalNews}\n${bulletize(f.personalNews)}`,
+    `${DR_TAGS.satisfaction}\n${safe.satisfaction}`,
+    `${DR_TAGS.done}\n${bulletize(safe.done)}`,
+    `${DR_TAGS.good}\n${bulletize(safe.good)}`,
+    `${DR_TAGS.moreNext}\n${bulletize(safe.moreNext)}`,
+    `${DR_TAGS.todoTomorrow}\n${bulletize(safe.todoTomorrow)}`,
+    `${DR_TAGS.wishTomorrow}\n${bulletize(safe.wishTomorrow)}`,
+    `${DR_TAGS.personalNews}\n${bulletize(safe.personalNews)}`,
   ].join("\n");
 
-  return [`:spiral_calendar_pad: ${f.date} ${f.userName} #dr`, head].join("\n");
+  const text = [`:spiral_calendar_pad: ${safe.date} ${safe.userName} #dr`, head].join(
+    "\n",
+  );
+
+  return {
+    text,
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text,
+        },
+      },
+    ],
+  };
 }
 
 export function bulletize(s: string): string {
