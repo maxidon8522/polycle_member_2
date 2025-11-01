@@ -166,39 +166,46 @@ export const postDailyReportToSlack = async (
         usedTokenType,
         raw: response,
       };
-    } catch (error) {
-      const err = error as {
-        message?: string;
-        data?: { error?: string; needed?: string; provided?: string };
-        response?: { data?: { error?: string; needed?: string; provided?: string } };
-        status?: number;
-      };
-      const responseData = err?.response?.data ?? err?.data ?? {};
+    } catch (unknownError) {
+      const toRecord = (value: unknown): Record<string, unknown> | undefined =>
+        value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
+      const pickString = (value: unknown): string | undefined =>
+        typeof value === "string" ? value : undefined;
+      const pickNumber = (value: unknown): number | null =>
+        typeof value === "number" ? value : null;
+
+      const err = (unknownError ?? {}) as Record<string, unknown>;
+      const responseObj = toRecord((err as { response?: unknown }).response);
+      const responseData =
+        toRecord(responseObj?.data) ?? toRecord((err as { data?: unknown }).data);
+
+      const status =
+        pickNumber(responseObj?.status) ??
+        pickNumber(err.status) ??
+        pickNumber(err.code) ??
+        null;
+
+      const message = pickString(err.message);
+      const errorCode = pickString(responseData?.error) ?? message ?? "slack_unknown_error";
+      const needed = pickString(responseData?.needed);
+      const provided = pickString(responseData?.provided);
+
       console.error("slack.post_daily_report.error", {
         channel: channelId,
         reportId: report.reportId,
         usingUserToken: usedTokenType === "user",
-        message: err?.message,
+        message,
         data: responseData,
-        status: err?.response?.status ?? err?.status ?? null,
-        error,
+        status,
+        error: unknownError,
       });
       return {
         ok: false,
-        error:
-          typeof (responseData as { error?: string }).error === "string"
-            ? (responseData as { error?: string }).error
-            : err?.message,
-        needed:
-          typeof (responseData as { needed?: string }).needed === "string"
-            ? (responseData as { needed?: string }).needed
-            : undefined,
-        provided:
-          typeof (responseData as { provided?: string }).provided === "string"
-            ? (responseData as { provided?: string }).provided
-            : undefined,
+        error: errorCode,
+        needed,
+        provided,
         usedTokenType,
-        raw: error,
+        raw: unknownError,
       };
     }
   };
