@@ -1,14 +1,30 @@
 "use client";
 
-import { Session } from "next-auth";
+import type { Session } from "next-auth";
 import { SessionProvider } from "next-auth/react";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
-interface Props {
-  session: Session | null;
+type Props = {
+  session?: Session | null;
   children: ReactNode;
-}
+};
+
+const ensureExpires = (session: Session | null | undefined): Session | null => {
+  if (!session) {
+    return null;
+  }
+
+  if (session.expires) {
+    return session;
+  }
+
+  return {
+    ...session,
+    expires: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+  };
+};
 
 export const AuthSessionProvider = ({ session, children }: Props) => {
-  return <SessionProvider session={session}>{children}</SessionProvider>;
+  const safeSession = ensureExpires(session);
+  return <SessionProvider session={safeSession ?? undefined}>{children}</SessionProvider>;
 };
