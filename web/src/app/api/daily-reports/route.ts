@@ -12,6 +12,7 @@ export async function GET(request: Request) {
   const userSlug = searchParams.get("user") ?? undefined;
   const tags = searchParams.get("tags")?.split(",").filter(Boolean);
 
+  
   const reports = await listDailyReports({
     weekStart,
     weekEnd,
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   const wishTomorrow = toStringOrEmpty(body.wishTomorrow);
   const personalNews = toStringOrEmpty(body.personalNews);
 
-  const tagsRaw: unknown[] = Array.isArray(body.tags)
+  const tagsRaw = Array.isArray(body.tags)
     ? body.tags
     : toStringOrEmpty(body.tags).split(" ");
   const tags = Array.from(
@@ -64,9 +65,15 @@ export async function POST(request: Request) {
 
   const sessionUserName = toStringOrEmpty(session.user.name);
   const sessionEmail = toStringOrEmpty(session.user.email);
-  const slackUserId = session.slackUserId ?? "";
-  const slackTeamId = session.slackTeamId ?? "";
-  const slackUserAccessTokenRaw = session.slackUserAccessToken ?? "";
+  const slackUserId = session.slackUserId ?? toStringOrEmpty(
+    (session as Record<string, unknown>).slackUserId,
+  );
+  const slackTeamId = session.slackTeamId ?? toStringOrEmpty(
+    (session as Record<string, unknown>).slackTeamId,
+  );
+  const slackUserAccessTokenRaw = session.slackUserAccessToken ?? toStringOrEmpty(
+    (session as Record<string, unknown>).slackUserAccessToken,
+  );
 
   const normalizeSlugCandidate = (input: string): string =>
     input
