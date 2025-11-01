@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   const wishTomorrow = toStringOrEmpty(body.wishTomorrow);
   const personalNews = toStringOrEmpty(body.personalNews);
 
-  const tagsRaw = Array.isArray(body.tags)
+  const tagsRaw: unknown[] = Array.isArray(body.tags)
     ? body.tags
     : toStringOrEmpty(body.tags).split(" ");
   const tags = Array.from(
