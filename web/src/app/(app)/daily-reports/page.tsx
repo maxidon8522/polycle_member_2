@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { listDailyReports } from "@/server/repositories/daily-reports-repository";
 
 export default async function DailyReportsPage() {
@@ -18,7 +19,7 @@ export default async function DailyReportsPage() {
         </div>
         <Link
           href="/daily-reports/new"
-          className="inline-flex items-center rounded-full bg-[#c89b6d] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-[#c89b6d]/40 transition-colors duration-200 hover:bg-[#ad7a46]"
+          className={buttonVariants("primary")}
         >
           DRを投稿
         </Link>
@@ -89,15 +90,43 @@ export default async function DailyReportsPage() {
                 </tr>
               ) : (
                 reports.map((report) => (
-                  <tr key={report.reportId}>
-                    <td className="px-4 py-3">{report.date}</td>
+                  <tr
+                    key={report.reportId}
+                    className="group transition-colors duration-200 hover:bg-[#f9efe3]/60"
+                  >
+                    <td className="px-4 py-3 font-medium text-[#3d3128]">
+                      {report.date}
+                    </td>
                     <td className="px-4 py-3">{report.userName}</td>
-                    <td className="px-4 py-3">{report.satisfactionToday}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex rounded-full bg-[#fff0de] px-3 py-1 text-xs font-semibold text-[#ad7a46]">
+                        {report.satisfactionToday}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">{report.doneToday}</td>
                     <td className="px-4 py-3">
-                      {report.tags.map((tag) => `#${tag}`).join(" ")}
+                      <div className="flex flex-wrap gap-2">
+                        {report.tags.length > 0 ? (
+                          report.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="inline-flex rounded-full border border-[#ead8c4] bg-white/70 px-3 py-1 text-xs font-medium text-[#7f6b5a]"
+                            >
+                              #{tag}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-[#b59b85]">
+                            タグなし
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 uppercase">{report.source}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex rounded-full bg-[#ead8c4]/70 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#7f6b5a]">
+                        {report.source}
+                      </span>
+                    </td>
                   </tr>
                 ))
               )}

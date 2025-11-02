@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { listTasks } from "@/server/repositories/tasks-repository";
 
 export default async function TasksPage() {
@@ -16,7 +17,10 @@ export default async function TasksPage() {
         </div>
         <Link
           href="/tasks/new"
-          className="cursor-not-allowed rounded-full bg-[#ead8c4] px-4 py-2 text-sm font-semibold text-[#b59b85]"
+          className={buttonVariants(
+            "secondary",
+            "cursor-not-allowed border-dashed text-[#b59b85]",
+          )}
           aria-disabled
         >
           新規タスク（準備中）
@@ -70,7 +74,10 @@ export default async function TasksPage() {
                 </tr>
               ) : (
                 tasks.map((task) => (
-                  <tr key={task.taskId}>
+                  <tr
+                    key={task.taskId}
+                    className="group transition-colors duration-200 hover:bg-[#f9efe3]/60"
+                  >
                     <td className="px-4 py-3">
                       <Link
                         href={`/tasks/${task.taskId}`}
@@ -80,10 +87,36 @@ export default async function TasksPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-3">{task.assigneeName}</td>
-                    <td className="px-4 py-3">{task.status}</td>
-                    <td className="px-4 py-3">{task.dueDate ?? "-"}</td>
-                    <td className="px-4 py-3">{task.priority}</td>
-                    <td className="px-4 py-3">{task.progressPercent}%</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex rounded-full bg-[#fff0de] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#ad7a46]">
+                        {task.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-[#7f6b5a]">
+                        <span className="inline-flex h-2 w-2 rounded-full bg-[#c89b6d]" />
+                        {task.dueDate ?? "-"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-[#ead8c4] bg-white/70 px-3 py-1 text-xs font-medium text-[#7f6b5a]">
+                        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-[#ad7a46]" />
+                        {task.priority}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="relative h-2 w-full max-w-[120px] overflow-hidden rounded-full bg-[#ead8c4]/60">
+                          <div
+                            className="absolute inset-y-0 left-0 rounded-full bg-[#c89b6d]"
+                            style={{ width: `${task.progressPercent}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-semibold text-[#ad7a46]">
+                          {task.progressPercent}%
+                        </span>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import type { Session } from "next-auth";
 import { getReportWeekdayCode, reportDateBy29hRule } from "@/lib/time";
+import { Button } from "@/components/ui/button";
 
 type AutoMeta = {
   date: string;
@@ -266,13 +267,9 @@ export default function DailyReportNewPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          <button
-            type="submit"
-            className="rounded-full bg-[#c89b6d] px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-[#c89b6d]/40 transition-transform duration-200 hover:-translate-y-0.5 hover:bg-[#ad7a46] disabled:translate-y-0 disabled:opacity-50"
-            disabled={submitting}
-          >
+          <Button type="submit" disabled={submitting}>
             {submitting ? "送信中..." : "Slackへ投稿して保存"}
-          </button>
+          </Button>
           {message && (
             <span
               className={`text-sm ${

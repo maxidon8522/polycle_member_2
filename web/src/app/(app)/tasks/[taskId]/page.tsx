@@ -87,18 +87,20 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
               履歴がありません。状態変更・コメント追加時に自動で記録されます。
             </div>
           ) : (
-            task.history.map((event) => (
-              <div
-                key={event.id}
-                className="rounded-xl border border-[#ead8c4] bg-[#fffaf5] px-4 py-3 shadow-sm"
-              >
-                <div className="flex justify-between text-xs uppercase text-[#ad7a46]">
-                  <span>{event.type}</span>
-                  <span>{event.happenedAt}</span>
-                </div>
-                <p className="mt-2 text-sm text-[#5b4c40]">{event.details}</p>
-              </div>
-            ))
+            <ol className="relative ml-3 border-l border-[#ead8c4] pl-5">
+              {task.history.map((event) => (
+                <li key={event.id} className="relative pb-6 last:pb-0">
+                  <span className="absolute -left-[11px] mt-1.5 inline-flex h-3 w-3 items-center justify-center rounded-full border-2 border-white bg-[#c89b6d] shadow-sm shadow-[#c89b6d]/40" />
+                  <div className="flex flex-col gap-2 rounded-xl border border-[#ead8c4] bg-white/70 px-4 py-3 shadow-sm shadow-[#ead8c4]/40">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-wide text-[#ad7a46]">
+                      <span>{event.type}</span>
+                      <span>{event.happenedAt}</span>
+                    </div>
+                    <p className="text-sm text-[#5b4c40]">{event.details}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
           )}
         </div>
       </Card>
