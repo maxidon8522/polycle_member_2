@@ -159,46 +159,46 @@ export default function DailyReportNewPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">デイリーレポートを投稿</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-[#3d3128]">デイリーレポートを投稿</h1>
+        <p className="mt-1 text-sm text-[#7f6b5a]">
           Slackへ本人として投稿し、Google Sheetsに保存されます。文章項目のみ入力してください。
         </p>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-700">自動取得メタ情報（送信されません）</h2>
-        <dl className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2">
+      <section className="rounded-2xl border border-[#ead8c4] bg-[#fffaf5] px-6 py-5 shadow-[0_12px_30px_-24px_rgba(173,122,70,0.65)]">
+        <h2 className="text-sm font-semibold text-[#ad7a46]">自動取得メタ情報（送信されません）</h2>
+        <dl className="mt-3 grid gap-4 text-sm text-[#5b4c40] md:grid-cols-2">
           <div>
-            <dt className="font-medium text-slate-500">対象日</dt>
+            <dt className="font-medium text-[#7f6b5a]">対象日</dt>
             <dd>
               {autoMeta.date}
               {currentDate.isPreviousDay ? "（前日扱い）" : ""}
             </dd>
           </div>
           <div>
-            <dt className="font-medium text-slate-500">曜日</dt>
+            <dt className="font-medium text-[#7f6b5a]">曜日</dt>
             <dd>{autoMeta.weekday}</dd>
           </div>
           <div>
-            <dt className="font-medium text-slate-500">ユーザー名</dt>
+            <dt className="font-medium text-[#7f6b5a]">ユーザー名</dt>
             <dd>{autoMeta.name || "-"}</dd>
           </div>
           <div>
-            <dt className="font-medium text-slate-500">メールアドレス</dt>
+            <dt className="font-medium text-[#7f6b5a]">メールアドレス</dt>
             <dd>{autoMeta.email || "-"}</dd>
           </div>
           <div>
-            <dt className="font-medium text-slate-500">Slack ユーザーID</dt>
+            <dt className="font-medium text-[#7f6b5a]">Slack ユーザーID</dt>
             <dd>{autoMeta.slackUserId ?? "-"}</dd>
           </div>
           <div>
-            <dt className="font-medium text-slate-500">Slack チームID</dt>
+            <dt className="font-medium text-[#7f6b5a]">Slack チームID</dt>
             <dd>{autoMeta.slackTeamId ?? "-"}</dd>
           </div>
           <div>
-            <dt className="font-medium text-slate-500">投稿チャンネル</dt>
+            <dt className="font-medium text-[#7f6b5a]">投稿チャンネル</dt>
             <dd>{autoMeta.channelId}</dd>
           </div>
         </dl>
@@ -250,7 +250,7 @@ export default function DailyReportNewPage() {
             onChange={handleChange}
           />
           <div className="flex flex-col gap-1 text-sm">
-            <label className="text-xs font-medium text-slate-500" htmlFor="tags">
+            <label className="text-xs font-medium text-[#ad7a46]" htmlFor="tags">
               タグ（スペース区切り）
             </label>
             <input
@@ -260,7 +260,7 @@ export default function DailyReportNewPage() {
               value={formState.tags}
               onChange={handleChange}
               placeholder="#sales #cs"
-              className="rounded-md border border-slate-300 px-3 py-2"
+              className="rounded-xl border border-[#ead8c4] bg-white px-3 py-2 text-[#3d3128] shadow-inner focus:border-[#c89b6d] focus:outline-none focus:ring-2 focus:ring-[#f1e6d8]"
             />
           </div>
         </div>
@@ -268,7 +268,7 @@ export default function DailyReportNewPage() {
         <div className="flex items-center gap-4">
           <button
             type="submit"
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+            className="rounded-full bg-[#c89b6d] px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-[#c89b6d]/40 transition-transform duration-200 hover:-translate-y-0.5 hover:bg-[#ad7a46] disabled:translate-y-0 disabled:opacity-50"
             disabled={submitting}
           >
             {submitting ? "送信中..." : "Slackへ投稿して保存"}
@@ -302,7 +302,7 @@ const TextareaField = ({
   required?: boolean;
 }) => (
   <div className="flex flex-col gap-1 text-sm">
-    <label className="text-xs font-medium text-slate-500" htmlFor={id}>
+    <label className="text-xs font-medium text-[#ad7a46]" htmlFor={id}>
       {label}
     </label>
     <textarea
@@ -312,7 +312,7 @@ const TextareaField = ({
       onChange={onChange}
       rows={5}
       required={required}
-      className="rounded-md border border-slate-300 px-3 py-2"
+      className="rounded-xl border border-[#ead8c4] bg-white px-3 py-2 text-[#3d3128] shadow-inner focus:border-[#c89b6d] focus:outline-none focus:ring-2 focus:ring-[#f1e6d8]"
     />
   </div>
 );

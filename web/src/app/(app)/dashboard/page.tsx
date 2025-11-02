@@ -15,8 +15,8 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">ダッシュボード</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-[#3d3128]">ダッシュボード</h1>
+        <p className="mt-1 text-sm text-[#7f6b5a]">
           今週のデイリーレポート、満足度の推移、タスク状況をまとめて確認します。
         </p>
       </div>
@@ -27,7 +27,7 @@ export default async function DashboardPage() {
           description="自分とチームの最新レポートを一覧で把握します。"
           footer={`総件数: ${reports.length}`}
         >
-          <div className="text-sm text-slate-500">
+          <div className="text-sm text-[#7f6b5a]">
             レポートの取得ロジックは後続で Sheets と連携します。
           </div>
         </Card>
@@ -36,7 +36,7 @@ export default async function DashboardPage() {
           description="期限切れ/今週締めのタスクを優先的に表示します。"
           footer={`対象タスク: ${tasks.length}`}
         >
-          <div className="text-sm text-slate-500">
+          <div className="text-sm text-[#7f6b5a]">
             タスク一覧のフィルタリングは今後実装予定です。
           </div>
         </Card>
@@ -46,7 +46,7 @@ export default async function DashboardPage() {
         title="満足度の週平均"
         description="個人 / 部署 / 全体の週次平均を折れ線グラフで表示します。"
       >
-        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-[#ead8c4] bg-[#fffaf5] p-6 text-center text-sm text-[#7f6b5a]">
           {weeklySatisfaction.length === 0
             ? "グラフ描画ロジックを後続実装。データ取得後に Recharts / Chart.js 等で表示予定。"
             : "グラフコンポーネントをここに表示します。"}
@@ -57,7 +57,7 @@ export default async function DashboardPage() {
         title="通知センター"
         description="Slack投稿失敗やシート書き込み失敗などのアラート履歴を表示します。"
       >
-        <div className="text-sm text-slate-500">
+        <div className="text-sm text-[#7f6b5a]">
           通知ストリームの設計は未着手のためプレースホルダーを表示しています。
         </div>
       </Card>

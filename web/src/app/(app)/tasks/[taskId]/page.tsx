@@ -17,10 +17,10 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">
+        <h1 className="text-2xl font-semibold text-[#3d3128]">
           {task.title ?? "タスク詳細"}
         </h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-[#7f6b5a]">
           状態変更・コメント履歴・ウォッチャー管理をここで行います。
         </p>
       </div>
@@ -46,7 +46,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
         </Card>
 
         <Card title="ウォッチャー">
-          <div className="text-sm text-slate-500">
+          <div className="text-sm text-[#7f6b5a]">
             {task.watchers.length > 0
               ? task.watchers.join(", ")
               : "ウォッチャー未設定"}
@@ -55,16 +55,16 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
       </div>
 
       <Card title="説明 / 備考">
-        <div className="space-y-4 text-sm text-slate-700">
+        <div className="space-y-4 text-sm text-[#5b4c40]">
           <p>{task.description || "説明未入力"}</p>
-          <p className="text-slate-500">{task.notes || "備考未入力"}</p>
+          <p className="text-[#b59b85]">{task.notes || "備考未入力"}</p>
           {task.links.length > 0 && (
-            <ul className="list-disc pl-5 text-slate-600">
+            <ul className="list-disc pl-5 text-[#5b4c40] marker:text-[#c89b6d]">
               {task.links.map((link, index) => (
                 <li key={index}>
                   <a
                     href={link.url}
-                    className="text-slate-900 underline"
+                    className="font-semibold text-[#ad7a46] underline-offset-4 hover:underline"
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -81,22 +81,22 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
         title="履歴"
         description="状態遷移やコメントを時系列で表示します。"
       >
-        <div className="space-y-3 text-sm text-slate-600">
+        <div className="space-y-3 text-sm text-[#5b4c40]">
           {task.history.length === 0 ? (
-            <div className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-slate-400">
+            <div className="rounded-xl border border-dashed border-[#ead8c4] bg-[#fffaf5] px-4 py-6 text-center text-[#b59b85]">
               履歴がありません。状態変更・コメント追加時に自動で記録されます。
             </div>
           ) : (
             task.history.map((event) => (
               <div
                 key={event.id}
-                className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3"
+                className="rounded-xl border border-[#ead8c4] bg-[#fffaf5] px-4 py-3 shadow-sm"
               >
-                <div className="flex justify-between text-xs uppercase text-slate-500">
+                <div className="flex justify-between text-xs uppercase text-[#ad7a46]">
                   <span>{event.type}</span>
                   <span>{event.happenedAt}</span>
                 </div>
-                <p className="mt-2 text-sm text-slate-700">{event.details}</p>
+                <p className="mt-2 text-sm text-[#5b4c40]">{event.details}</p>
               </div>
             ))
           )}
@@ -108,7 +108,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
 
 const DetailItem = ({ label, value }: { label: string; value: string }) => (
   <div className="flex justify-between">
-    <dt className="text-xs uppercase text-slate-500">{label}</dt>
-    <dd className="font-medium text-slate-900">{value}</dd>
+    <dt className="text-xs uppercase text-[#ad7a46]">{label}</dt>
+    <dd className="font-medium text-[#3d3128]">{value}</dd>
   </div>
 );
