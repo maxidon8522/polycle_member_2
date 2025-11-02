@@ -12,7 +12,7 @@ export const DEPARTMENT_OF_USER: Record<string, Department> = {
 // 2) 任意: SlackユーザーID → userSlug
 export const USER_SLUG_OF_SLACK: Record<string, string> = {
   // "U0ABCDEF12": "yamamoto",
-  "U09HVFPNX1P": "murakami",
+  "U09HVFPNX1P": "Murakami Makishi",
   "U09A5ENUWP9": "hello polycle",
   "U0979RZ6K41": "Otsuka Himawari",
   "U08GT7K93N0": "Yokoe Hinami",
