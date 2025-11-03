@@ -2,9 +2,36 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { listTasks } from "@/server/repositories/tasks-repository";
+import type { Task } from "@/types";
+
+const toTimestamp = (value?: string | null): number | null => {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const buildTaskSummary = (tasks: Task[]) => {
+  const now = Date.now();
+
+  const overdueCount = tasks.filter((task) => {
+    const due = toTimestamp(task.dueDate);
+    if (due === null) return false;
+    return due < now && task.status !== "完了";
+  }).length;
+
+  const dueSoonCount = tasks.filter((task) => {
+    const due = toTimestamp(task.dueDate);
+    if (due === null) return false;
+    const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= 3 && task.status !== "完了";
+  }).length;
+
+  return { now, overdueCount, dueSoonCount };
+};
 
 export default async function TasksPage() {
   const tasks = await listTasks();
+  const { now, overdueCount, dueSoonCount } = buildTaskSummary(tasks);
 
   return (
     <div className="space-y-6">
@@ -17,13 +44,9 @@ export default async function TasksPage() {
         </div>
         <Link
           href="/tasks/new"
-          className={buttonVariants(
-            "secondary",
-            "cursor-not-allowed border-dashed text-[#b59b85]",
-          )}
-          aria-disabled
+          className={buttonVariants("secondary")}
         >
-          新規タスク（準備中）
+          新規タスク
         </Link>
       </div>
 
@@ -48,7 +71,7 @@ export default async function TasksPage() {
       <Card
         title="タスク一覧"
         description="シートのタスクタブと同期します。状態変更は詳細画面で実行します。"
-        footer={`取得件数: ${tasks.length}`}
+        footer={`取得件数: ${tasks.length} | 期限超過: ${overdueCount} | 3日以内の期限: ${dueSoonCount}`}
       >
         <div className="overflow-hidden rounded-xl border border-dashed border-[#ead8c4] bg-[#fffaf5]">
           <table className="min-w-full divide-y divide-[#ead8c4] text-sm">
@@ -85,6 +108,14 @@ export default async function TasksPage() {
                       >
                         {task.title}
                       </Link>
+                      <div className="mt-1 text-xs text-[#7f6b5a]">
+                        {task.projectName}
+                      </div>
+                      {task.watchers.length > 0 && (
+                        <div className="mt-1 text-xs text-[#b59b85]">
+                          👀 {task.watchers.join(", ")}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">{task.assigneeName}</td>
                     <td className="px-4 py-3">
@@ -93,10 +124,32 @@ export default async function TasksPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-[#7f6b5a]">
-                        <span className="inline-flex h-2 w-2 rounded-full bg-[#c89b6d]" />
-                        {task.dueDate ?? "-"}
-                      </div>
+                      {task.dueDate ? (
+                        <div
+                          className={[
+                            "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium",
+                            (() => {
+                              const due = toTimestamp(task.dueDate);
+                              if (due === null) return "bg-white/70 text-[#7f6b5a]";
+                              if (due < now && task.status !== "完了") {
+                                return "bg-[#fbe8e6] text-[#c04747]";
+                              }
+                              const diffDays = Math.ceil(
+                                (due - now) / (1000 * 60 * 60 * 24),
+                              );
+                              if (diffDays >= 0 && diffDays <= 3) {
+                                return "bg-[#fff4da] text-[#ad7a46]";
+                              }
+                              return "bg-white/70 text-[#7f6b5a]";
+                            })(),
+                          ].join(" ")}
+                        >
+                          <span className="inline-flex h-2 w-2 rounded-full bg-[#c89b6d]" />
+                          {task.dueDate}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-[#b59b85]">未設定</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-1 rounded-full border border-[#ead8c4] bg-white/70 px-3 py-1 text-xs font-medium text-[#7f6b5a]">

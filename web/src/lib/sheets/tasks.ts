@@ -1,10 +1,26 @@
-import { Task } from "@/types";
+import { Task, TaskHistoryEvent } from "@/types";
 import { env } from "@/config/env";
 import { retryWithBackoff } from "@/lib/retry";
 import { getSheetsClient } from "./google";
 
 const TASK_SHEET_NAME = "tasks";
 const TASK_HISTORY_SHEET_NAME = "task_history";
+const TASK_SHEET_RANGE = `'${TASK_SHEET_NAME}'!A:V`;
+const TASK_HISTORY_RANGE = `'${TASK_HISTORY_SHEET_NAME}'!A:G`;
+const KNOWN_HISTORY_TYPES: readonly TaskHistoryEvent["type"][] = [
+  "status_change",
+  "comment",
+  "update",
+];
+
+const normalizeHistoryType = (
+  value: string,
+): TaskHistoryEvent["type"] => {
+  if (KNOWN_HISTORY_TYPES.includes(value as TaskHistoryEvent["type"])) {
+    return value as TaskHistoryEvent["type"];
+  }
+  return "update";
+};
 
 const safeString = (value: unknown): string =>
   value === undefined || value === null ? "" : String(value);
@@ -21,6 +37,79 @@ const splitSheetValues = (values: string[][]) => {
   };
 };
 
+const parseLinksCell = (cell: string): Task["links"] => {
+  const raw = safeString(cell).trim();
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(/\n+/)
+    .map((entry) => {
+      const [left, right] = entry.split("|");
+      const label = left?.trim();
+      const url = right?.trim() || label;
+      if (!url) {
+        return null;
+      }
+      if (right) {
+        return {
+          label: label || undefined,
+          url,
+        };
+      }
+      return {
+        url,
+      };
+    })
+    .filter((link): link is Task["links"][number] => Boolean(link?.url));
+};
+
+const parseWatchersCell = (cell: string): string[] => {
+  const raw = safeString(cell);
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(/[\n,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const mapRowToTaskHistory = (
+  row: string[],
+  rowIndex: number,
+): TaskHistoryEvent | null => {
+  const taskId = safeString(row[0]);
+  if (!taskId) {
+    return null;
+  }
+
+  const fallbackId = `hist_${taskId}_${String(rowIndex + 1).padStart(4, "0")}`;
+  const historyId = safeString(row[1]) || fallbackId;
+  const happenedAt = safeString(row[2]) || new Date().toISOString();
+  const actorId = safeString(row[3]) || "unknown";
+  const actorName = safeString(row[4]) || actorId || "unknown";
+  const rawType = safeString(row[5]) || "update";
+  const normalizedType = normalizeHistoryType(rawType);
+  const detailsCell = safeString(row[6]);
+  const details =
+    detailsCell ||
+    (normalizedType === "update" && rawType && rawType !== "update"
+      ? rawType
+      : "");
+
+  return {
+    id: historyId,
+    taskId,
+    happenedAt,
+    actorId,
+    actorName,
+    type: normalizedType,
+    details,
+  };
+};
+
 export const readTasks = async (): Promise<string[][]> => {
   const spreadsheetId = env.server.SHEETS_TASKS_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
@@ -28,7 +117,7 @@ export const readTasks = async (): Promise<string[][]> => {
   try {
     const response = await retryWithBackoff(async (attempt) => {
       try {
-        const range = `'${TASK_SHEET_NAME}'!A:Z`;
+        const range = TASK_SHEET_RANGE;
         if (attempt === 0) {
           console.info("sheets.tasks.read.request", {
             spreadsheetId,
@@ -63,27 +152,59 @@ export const readTasks = async (): Promise<string[][]> => {
   }
 };
 
-const mapRowToTask = (row: string[]): Task | null => {
+export const readTaskHistory = async (): Promise<string[][]> => {
+  const spreadsheetId = env.server.SHEETS_TASKS_SPREADSHEET_ID;
+  const sheets = await getSheetsClient();
+
+  try {
+    const response = await retryWithBackoff(async (attempt) => {
+      try {
+        if (attempt === 0) {
+          console.info("sheets.tasks.history.read.request", {
+            spreadsheetId,
+            range: TASK_HISTORY_RANGE,
+          });
+        }
+        return await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: TASK_HISTORY_RANGE,
+          valueRenderOption: "UNFORMATTED_VALUE",
+        });
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error("sheets.tasks.history.read.error", {
+          attempt,
+          spreadsheetId,
+          error: errorMessage,
+        });
+        throw error;
+      }
+    });
+
+    return response.data.values ?? [];
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.warn("sheets.tasks.history.read.failed", {
+      spreadsheetId,
+      error: errorMessage,
+    });
+    return [];
+  }
+};
+
+const mapRowToTask = (
+  row: string[],
+  history: TaskHistoryEvent[],
+): Task | null => {
   const taskId = safeString(row[0]);
   if (!taskId) {
     return null;
   }
 
-  const linksCell = safeString(row[12]);
-  const links = linksCell
-    ? linksCell.split(/\n+/).map((entry) => {
-        const [label, url] = entry.split("|");
-        return {
-          label: url ? label : undefined,
-          url: url ? url : label,
-        };
-      })
-    : [];
-
-  const watchersCell = safeString(row[17]);
-  const watchers = watchersCell
-    ? watchersCell.split(",").map((item) => item.trim()).filter(Boolean)
-    : [];
+  const links = parseLinksCell(row[13]);
+  const watchers = parseWatchersCell(row[18]);
+  const importance = safeString(row[12]) || undefined;
 
   return {
     taskId,
@@ -98,17 +219,17 @@ const mapRowToTask = (row: string[]): Task | null => {
     status: safeString(row[9]) as Task["status"],
     progressPercent: Number.parseInt(safeString(row[10]) || "0", 10) || 0,
     priority: safeString(row[11]) as Task["priority"],
-    importance: "",
-    startDate: safeString(row[13]) || undefined,
-    dueDate: safeString(row[14]) || undefined,
-    doneDate: safeString(row[15]) || undefined,
+    importance,
+    startDate: safeString(row[14]) || undefined,
+    dueDate: safeString(row[15]) || undefined,
+    doneDate: safeString(row[16]) || undefined,
     links,
-    notes: safeString(row[16]) || undefined,
+    notes: safeString(row[17]) || undefined,
     watchers,
-    createdBy: safeString(row[18]) || "",
-    createdAt: safeString(row[19]) || "",
-    updatedAt: safeString(row[20]) || "",
-    history: [],
+    createdBy: safeString(row[19]) || "",
+    createdAt: safeString(row[20]) || "",
+    updatedAt: safeString(row[21]) || "",
+    history,
   };
 };
 
@@ -125,6 +246,7 @@ const toTaskRow = (task: Task): (string | number)[] => [
   task.status,
   task.progressPercent ?? 0,
   task.priority,
+  task.importance ?? "",
   (task.links ?? [])
     .map((link) =>
       link.label ? `${link.label}|${link.url}` : `${link.url}`,
@@ -161,11 +283,45 @@ const findTaskRowIndex = (
 };
 
 export const fetchTasks = async (): Promise<Task[]> => {
-  const values = await readTasks();
-  const { rows } = splitSheetValues(values);
+  const [taskValues, historyValues] = await Promise.all([
+    readTasks(),
+    readTaskHistory(),
+  ]);
 
-  return rows
-    .map((row) => mapRowToTask(row))
+  const { rows: taskRows } = splitSheetValues(taskValues);
+  const { rows: historyRows } = splitSheetValues(historyValues);
+
+  const historyByTaskId = new Map<string, TaskHistoryEvent[]>();
+  historyRows.forEach((row, index) => {
+    const event = mapRowToTaskHistory(row, index);
+    if (!event) {
+      return;
+    }
+    const existing = historyByTaskId.get(event.taskId) ?? [];
+    existing.push(event);
+    historyByTaskId.set(event.taskId, existing);
+  });
+
+  for (const [key, events] of historyByTaskId.entries()) {
+    const sorted = events.slice().sort((a, b) => {
+      const aTime = Date.parse(a.happenedAt);
+      const bTime = Date.parse(b.happenedAt);
+      if (Number.isNaN(aTime) && Number.isNaN(bTime)) {
+        return a.id.localeCompare(b.id);
+      }
+      if (Number.isNaN(aTime)) return -1;
+      if (Number.isNaN(bTime)) return 1;
+      return aTime - bTime;
+    });
+    historyByTaskId.set(key, sorted);
+  }
+
+  return taskRows
+    .map((row) => {
+      const taskId = safeString(row[0]);
+      const history = historyByTaskId.get(taskId) ?? [];
+      return mapRowToTask(row, history);
+    })
     .filter((task): task is Task => task !== null);
 };
 
@@ -179,7 +335,7 @@ export const upsertTask = async (task: Task): Promise<void> => {
   const payload = [toTaskRow(task)];
 
   if (rowIndex) {
-    const range = `'${TASK_SHEET_NAME}'!A${rowIndex}:U${rowIndex}`;
+    const range = `'${TASK_SHEET_NAME}'!A${rowIndex}:V${rowIndex}`;
     await retryWithBackoff(async (attempt) => {
       try {
         await sheets.spreadsheets.values.update({
@@ -202,7 +358,7 @@ export const upsertTask = async (task: Task): Promise<void> => {
         }
     });
   } else {
-    const range = `'${TASK_SHEET_NAME}'!A:U`;
+    const range = `'${TASK_SHEET_NAME}'!A:V`;
     await retryWithBackoff(async (attempt) => {
       try {
         await sheets.spreadsheets.values.append({
@@ -228,21 +384,29 @@ export const upsertTask = async (task: Task): Promise<void> => {
   }
 };
 
-export const appendTaskHistory = async (
-  taskId: string,
-  historyLine: string[],
+export const appendTaskHistoryEvent = async (
+  event: TaskHistoryEvent,
 ): Promise<void> => {
   const spreadsheetId = env.server.SHEETS_TASKS_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
+  const row = [
+    event.taskId,
+    event.id,
+    event.happenedAt,
+    event.actorId,
+    event.actorName,
+    event.type,
+    event.details,
+  ];
 
   await retryWithBackoff(async (attempt) => {
     try {
       await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: `${TASK_HISTORY_SHEET_NAME}!A:E`,
+        range: TASK_HISTORY_RANGE,
         valueInputOption: "RAW",
         insertDataOption: "INSERT_ROWS",
-        requestBody: { values: [[taskId, ...historyLine]] },
+        requestBody: { values: [row] },
       });
     } catch (error) {
       const errorMessage =
@@ -250,7 +414,7 @@ export const appendTaskHistory = async (
       console.error("sheets.tasks.history.append.error", {
         attempt,
         spreadsheetId,
-        taskId,
+        taskId: event.taskId,
         error: errorMessage,
       });
       throw error;

@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { listTasks, saveTask } from "@/server/repositories/tasks-repository";
+import {
+  listTasks,
+  saveTask,
+  TaskHistoryEventInput,
+} from "@/server/repositories/tasks-repository";
 import { taskUpsertSchema } from "@/validation";
 import { TaskPriority, TaskStatus } from "@/types";
+import { auth } from "@/server/auth";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -25,12 +30,40 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await request.json();
   const payload = taskUpsertSchema.parse(body);
+  const actorId =
+    session.user.id ??
+    session.user.email ??
+    session.user.slackUserId ??
+    "unknown";
+  const actorName =
+    session.user.name ??
+    session.user.email ??
+    session.user.slackUserId ??
+    "unknown";
 
-  await saveTask(payload);
+  const historyEvent: TaskHistoryEventInput = {
+    type: "update",
+    actorId,
+    actorName,
+    details: "タスクを登録しました。",
+  };
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  const task = await saveTask(
+    {
+      ...payload,
+      createdBy: payload.createdBy || actorName,
+    },
+    { historyEvents: [historyEvent] },
+  );
+
+  return NextResponse.json({ data: task }, { status: 201 });
 }
 
 const isTaskStatus = (value?: string | null): value is TaskStatus => {
