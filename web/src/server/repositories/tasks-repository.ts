@@ -184,8 +184,16 @@ export const saveTask = async (
   if (historyEvents.length > 0) {
     for (const event of historyEvents) {
       const normalizedEvent = ensureHistoryEvent(taskId, event);
-      await appendTaskHistoryEvent(normalizedEvent);
-      appendedEvents.push(normalizedEvent);
+      try {
+        await appendTaskHistoryEvent(normalizedEvent);
+        appendedEvents.push(normalizedEvent);
+      } catch (error) {
+        console.error("tasks.repo.history.append.failed", {
+          taskId,
+          eventId: normalizedEvent.id,
+          error,
+        });
+      }
     }
   }
 
