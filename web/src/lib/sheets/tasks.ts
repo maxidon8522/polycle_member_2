@@ -5,7 +5,7 @@ import { getSheetsClient } from "./google";
 
 const TASK_SHEET_NAME = "tasks";
 const TASK_HISTORY_SHEET_NAME = "task_history";
-const TASK_SHEET_RANGE = `'${TASK_SHEET_NAME}'!A:V`;
+const TASK_SHEET_RANGE = `'${TASK_SHEET_NAME}'!A:M`;
 const TASK_HISTORY_RANGE = `'${TASK_HISTORY_SHEET_NAME}'!A:G`;
 const KNOWN_HISTORY_TYPES: readonly TaskHistoryEvent["type"][] = [
   "status_change",
@@ -35,45 +35,6 @@ const splitSheetValues = (values: string[][]) => {
     header: header ?? [],
     rows,
   };
-};
-
-const parseLinksCell = (cell: string): Task["links"] => {
-  const raw = safeString(cell).trim();
-  if (!raw) {
-    return [];
-  }
-
-  return raw
-    .split(/\n+/)
-    .map((entry) => {
-      const [left, right] = entry.split("|");
-      const label = left?.trim();
-      const url = right?.trim() || label;
-      if (!url) {
-        return null;
-      }
-      if (right) {
-        return {
-          label: label || undefined,
-          url,
-        };
-      }
-      return {
-        url,
-      };
-    })
-    .filter((link): link is Task["links"][number] => Boolean(link?.url));
-};
-
-const parseWatchersCell = (cell: string): string[] => {
-  const raw = safeString(cell);
-  if (!raw) {
-    return [];
-  }
-  return raw
-    .split(/[\n,]/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
 };
 
 const mapRowToTaskHistory = (
@@ -202,33 +163,20 @@ const mapRowToTask = (
     return null;
   }
 
-  const links = parseLinksCell(row[13]);
-  const watchers = parseWatchersCell(row[18]);
-  const importance = safeString(row[12]) || undefined;
-
   return {
     taskId,
     projectName: safeString(row[1]),
     title: safeString(row[2]),
-    description: safeString(row[3]),
-    assigneeName: safeString(row[4]),
-    assigneeEmail: safeString(row[5]),
-    slackUserId: safeString(row[6]) || undefined,
-    category: safeString(row[7]) || undefined,
-    taskType: safeString(row[8]) || undefined,
-    status: safeString(row[9]) as Task["status"],
-    progressPercent: Number.parseInt(safeString(row[10]) || "0", 10) || 0,
-    priority: safeString(row[11]) as Task["priority"],
-    importance,
-    startDate: safeString(row[14]) || undefined,
-    dueDate: safeString(row[15]) || undefined,
-    doneDate: safeString(row[16]) || undefined,
-    links,
-    notes: safeString(row[17]) || undefined,
-    watchers,
-    createdBy: safeString(row[19]) || "",
-    createdAt: safeString(row[20]) || "",
-    updatedAt: safeString(row[21]) || "",
+    assigneeName: safeString(row[3]),
+    status: safeString(row[4]) as Task["status"],
+    dueDate: safeString(row[5]) || undefined,
+    startDate: safeString(row[6]) || undefined,
+    doneDate: safeString(row[7]) || undefined,
+    detailUrl: safeString(row[8]) || undefined,
+    notes: safeString(row[9]) || undefined,
+    priority: safeString(row[10]) as Task["priority"],
+    createdAt: safeString(row[11]) || "",
+    updatedAt: safeString(row[12]) || "",
     history,
   };
 };
@@ -237,27 +185,14 @@ const toTaskRow = (task: Task): (string | number)[] => [
   task.taskId,
   task.projectName,
   task.title,
-  task.description,
   task.assigneeName,
-  task.assigneeEmail,
-  task.slackUserId ?? "",
-  task.category ?? "",
-  task.taskType ?? "",
   task.status,
-  task.progressPercent ?? 0,
-  task.priority,
-  task.importance ?? "",
-  (task.links ?? [])
-    .map((link) =>
-      link.label ? `${link.label}|${link.url}` : `${link.url}`,
-    )
-    .join("\n"),
-  task.startDate ?? "",
   task.dueDate ?? "",
+  task.startDate ?? "",
   task.doneDate ?? "",
+  task.detailUrl ?? "",
   task.notes ?? "",
-  (task.watchers ?? []).join(","),
-  task.createdBy,
+  task.priority,
   task.createdAt ?? "",
   task.updatedAt ?? "",
 ];
@@ -335,7 +270,7 @@ export const upsertTask = async (task: Task): Promise<void> => {
   const payload = [toTaskRow(task)];
 
   if (rowIndex) {
-    const range = `'${TASK_SHEET_NAME}'!A${rowIndex}:V${rowIndex}`;
+    const range = `'${TASK_SHEET_NAME}'!A${rowIndex}:M${rowIndex}`;
     await retryWithBackoff(async (attempt) => {
       try {
         await sheets.spreadsheets.values.update({
@@ -358,7 +293,7 @@ export const upsertTask = async (task: Task): Promise<void> => {
         }
     });
   } else {
-    const range = `'${TASK_SHEET_NAME}'!A:V`;
+    const range = `'${TASK_SHEET_NAME}'!A:M`;
     await retryWithBackoff(async (attempt) => {
       try {
         await sheets.spreadsheets.values.append({

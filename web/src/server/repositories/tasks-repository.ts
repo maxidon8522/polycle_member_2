@@ -64,15 +64,10 @@ const matchesSearchTerm = (task: Task, term: string): boolean => {
 
   const haystack = [
     task.title,
-    task.description,
     task.notes ?? "",
     task.projectName,
-    task.category ?? "",
-    task.taskType ?? "",
     task.assigneeName,
-    task.assigneeEmail,
-    task.watchers.join(" "),
-    task.links.map((link) => `${link.label ?? ""} ${link.url}`).join(" "),
+    task.detailUrl ?? "",
   ]
     .join(" ")
     .toLowerCase();
@@ -94,11 +89,7 @@ export const listTasks = async (
   const filtered = tasks.filter((task) => {
     if (assigneeFilter) {
       const matchesAssignee =
-        normalize(task.assigneeName).includes(assigneeFilter) ||
-        normalize(task.assigneeEmail).includes(assigneeFilter) ||
-        task.watchers.some((watcher) =>
-          normalize(watcher).includes(assigneeFilter),
-        );
+        normalize(task.assigneeName).includes(assigneeFilter);
       if (!matchesAssignee) {
         return false;
       }

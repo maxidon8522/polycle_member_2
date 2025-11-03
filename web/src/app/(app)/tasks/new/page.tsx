@@ -20,44 +20,14 @@ const TASK_PRIORITY_OPTIONS = ["高", "中", "低"] as const;
 type FormState = {
   projectName: string;
   title: string;
-  description: string;
   assigneeName: string;
-  assigneeEmail: string;
-  slackUserId: string;
-  category: string;
-  taskType: string;
   status: (typeof TASK_STATUS_OPTIONS)[number];
-  progressPercent: string;
   priority: (typeof TASK_PRIORITY_OPTIONS)[number];
-  importance: string;
   startDate: string;
   dueDate: string;
   doneDate: string;
-  links: string;
+  detailUrl: string;
   notes: string;
-  watchers: string;
-};
-
-const parseLinks = (raw: string) => {
-  const entries = raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  return entries.map((entry) => {
-    const [label, url] = entry.split("|").map((item) => item.trim());
-    if (url) {
-      return { label: label || undefined, url };
-    }
-    return { url: label ?? "" };
-  });
-};
-
-const parseWatchers = (raw: string): string[] => {
-  return raw
-    .split(/[\n,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
 };
 
 export default function TaskNewPage() {
@@ -73,22 +43,14 @@ export default function TaskNewPage() {
   const [formState, setFormState] = useState<FormState>({
     projectName: "",
     title: "",
-    description: "",
     assigneeName: "",
-    assigneeEmail: "",
-    slackUserId: "",
-    category: "",
-    taskType: "",
     status: "未着手",
-    progressPercent: "0",
     priority: "中",
-    importance: "",
     startDate: "",
     dueDate: "",
     doneDate: "",
-    links: "",
+    detailUrl: "",
     notes: "",
-    watchers: "",
   });
 
   useEffect(() => {
@@ -98,9 +60,7 @@ export default function TaskNewPage() {
         const response = await fetch("/api/auth/session", {
           cache: "no-store",
         });
-        if (!response.ok) {
-          return;
-        }
+        if (!response.ok) return;
         const data = (await response.json()) as Session;
         if (!cancelled) {
           setSession(data);
@@ -133,13 +93,10 @@ export default function TaskNewPage() {
   }, [session]);
 
   const handleChange = (
-    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+    event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = event.target;
-    setFormState((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormState((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -157,23 +114,14 @@ export default function TaskNewPage() {
         body: JSON.stringify({
           projectName: formState.projectName.trim(),
           title: formState.title.trim(),
-          description: formState.description,
           assigneeName: formState.assigneeName.trim(),
-          assigneeEmail: formState.assigneeEmail.trim(),
-          slackUserId: formState.slackUserId.trim() || undefined,
-          category: formState.category.trim() || undefined,
-          taskType: formState.taskType.trim() || undefined,
           status: formState.status,
-          progressPercent: Number.parseInt(formState.progressPercent, 10) || 0,
           priority: formState.priority,
-          importance: formState.importance.trim() || undefined,
           startDate: formState.startDate || undefined,
           dueDate: formState.dueDate || undefined,
           doneDate: formState.doneDate || undefined,
-          links: parseLinks(formState.links),
-          notes: formState.notes || undefined,
-          createdBy,
-          watchers: parseWatchers(formState.watchers),
+          detailUrl: formState.detailUrl.trim() || undefined,
+          notes: formState.notes.trim() || undefined,
         }),
       });
 
@@ -212,7 +160,7 @@ export default function TaskNewPage() {
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-[#3d3128]">新規タスク</h1>
         <p className="text-sm text-[#7f6b5a]">
-          プロジェクト名や担当者、期限、優先度を入力してタスクを登録します。
+          PJ名・タスク名・担当者・期限・優先度など、スプレッドシートの列と同じ情報だけで登録できます。
         </p>
       </header>
 
@@ -226,15 +174,15 @@ export default function TaskNewPage() {
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-widest text-[#ad7a46]">
-              SlackユーザーID
-            </dt>
-            <dd>{session?.user?.slackUserId ?? "-"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold uppercase tracking-widest text-[#ad7a46]">
               状態
             </dt>
             <dd>登録直後は {formState.status} です。</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-widest text-[#ad7a46]">
+              優先度
+            </dt>
+            <dd>{formState.priority}</dd>
           </div>
         </dl>
       </section>
@@ -242,7 +190,7 @@ export default function TaskNewPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2">
           <TextField
-            label="プロジェクト名"
+            label="PJ名"
             name="projectName"
             value={formState.projectName}
             onChange={handleChange}
@@ -256,50 +204,14 @@ export default function TaskNewPage() {
             required
           />
           <TextField
-            label="担当者名"
+            label="担当者"
             name="assigneeName"
             value={formState.assigneeName}
             onChange={handleChange}
             required
           />
-          <TextField
-            label="担当者メールアドレス"
-            name="assigneeEmail"
-            value={formState.assigneeEmail}
-            onChange={handleChange}
-            required
-            type="email"
-          />
-          <TextField
-            label="SlackユーザーID"
-            name="slackUserId"
-            value={formState.slackUserId}
-            onChange={handleChange}
-            placeholder="U0123456789"
-          />
-          <TextField
-            label="カテゴリ"
-            name="category"
-            value={formState.category}
-            onChange={handleChange}
-          />
-          <TextField
-            label="タスク形式"
-            name="taskType"
-            value={formState.taskType}
-            onChange={handleChange}
-          />
-          <TextField
-            label="重要度（任意入力）"
-            name="importance"
-            value={formState.importance}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
           <SelectField
-            label="状態"
+            label="ステータス"
             name="status"
             value={formState.status}
             onChange={handleChange}
@@ -312,20 +224,11 @@ export default function TaskNewPage() {
             onChange={handleChange}
             options={TASK_PRIORITY_OPTIONS}
           />
-          <TextField
-            label="進捗率"
-            name="progressPercent"
-            value={formState.progressPercent}
-            onChange={handleChange}
-            type="number"
-            min={0}
-            max={100}
-          />
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
           <TextField
-            label="着手日"
+            label="開始日"
             name="startDate"
             value={formState.startDate}
             onChange={handleChange}
@@ -339,7 +242,7 @@ export default function TaskNewPage() {
             type="date"
           />
           <TextField
-            label="完了日"
+            label="終了日"
             name="doneDate"
             value={formState.doneDate}
             onChange={handleChange}
@@ -347,19 +250,12 @@ export default function TaskNewPage() {
           />
         </div>
 
-        <TextareaField
-          label="タスク概要"
-          name="description"
-          value={formState.description}
+        <TextField
+          label="詳細URL"
+          name="detailUrl"
+          value={formState.detailUrl}
           onChange={handleChange}
-        />
-
-        <TextareaField
-          label="リンク（1行ごとに `ラベル|URL` または URL のみ）"
-          name="links"
-          value={formState.links}
-          onChange={handleChange}
-          placeholder="要件定義|https://example.com/spec"
+          placeholder="https://example.com/task-detail"
         />
 
         <TextareaField
@@ -367,14 +263,7 @@ export default function TaskNewPage() {
           name="notes"
           value={formState.notes}
           onChange={handleChange}
-        />
-
-        <TextareaField
-          label="ウォッチャー（カンマまたは改行区切り）"
-          name="watchers"
-          value={formState.watchers}
-          onChange={handleChange}
-          placeholder="山田太郎, 佐藤花子"
+          placeholder="補足情報や共有事項があれば記入してください。"
         />
 
         <div className="flex items-center gap-4">
@@ -404,8 +293,6 @@ const TextField = ({
   required,
   type = "text",
   placeholder,
-  min,
-  max,
 }: {
   label: string;
   name: string;
@@ -414,8 +301,6 @@ const TextField = ({
   required?: boolean;
   type?: string;
   placeholder?: string;
-  min?: number;
-  max?: number;
 }) => (
   <div className="flex flex-col gap-1 text-sm">
     <label className="text-xs font-medium text-[#ad7a46]" htmlFor={name}>
@@ -429,8 +314,6 @@ const TextField = ({
       required={required}
       type={type}
       placeholder={placeholder}
-      min={min}
-      max={max}
       className="rounded-xl border border-[#ead8c4] bg-white px-3 py-2 text-[#3d3128] shadow-inner focus:border-[#c89b6d] focus:outline-none focus:ring-2 focus:ring-[#f1e6d8]"
     />
   </div>

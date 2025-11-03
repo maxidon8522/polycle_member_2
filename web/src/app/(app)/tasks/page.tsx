@@ -80,16 +80,17 @@ export default async function TasksPage() {
                 <th className="px-4 py-3 font-semibold">タスク</th>
                 <th className="px-4 py-3 font-semibold">担当</th>
                 <th className="px-4 py-3 font-semibold">状態</th>
+                <th className="px-4 py-3 font-semibold">開始日</th>
                 <th className="px-4 py-3 font-semibold">期限</th>
+                <th className="px-4 py-3 font-semibold">終了日</th>
                 <th className="px-4 py-3 font-semibold">優先度</th>
-                <th className="px-4 py-3 font-semibold">進捗%</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f1e6d8] bg-[#fffdf9] text-[#5b4c40]">
               {tasks.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-8 text-center text-sm text-[#b59b85]"
                   >
                     タスクデータがありません。Google Sheets連携完了後に表示されます。
@@ -111,9 +112,16 @@ export default async function TasksPage() {
                       <div className="mt-1 text-xs text-[#7f6b5a]">
                         {task.projectName}
                       </div>
-                      {task.watchers.length > 0 && (
-                        <div className="mt-1 text-xs text-[#b59b85]">
-                          👀 {task.watchers.join(", ")}
+                      {task.detailUrl && (
+                        <div className="mt-1 text-xs">
+                          <a
+                            href={task.detailUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[#ad7a46] underline-offset-4 hover:underline"
+                          >
+                            詳細を見る
+                          </a>
                         </div>
                       )}
                     </td>
@@ -122,6 +130,15 @@ export default async function TasksPage() {
                       <span className="inline-flex rounded-full bg-[#fff0de] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#ad7a46]">
                         {task.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {task.startDate ? (
+                        <span className="text-xs font-medium text-[#7f6b5a]">
+                          {task.startDate}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[#b59b85]">未設定</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {task.dueDate ? (
@@ -152,23 +169,19 @@ export default async function TasksPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
+                      {task.doneDate ? (
+                        <span className="text-xs font-medium text-[#7f6b5a]">
+                          {task.doneDate}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[#b59b85]">未設定</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-1 rounded-full border border-[#ead8c4] bg-white/70 px-3 py-1 text-xs font-medium text-[#7f6b5a]">
                         <span className="inline-flex h-1.5 w-1.5 rounded-full bg-[#ad7a46]" />
                         {task.priority}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="relative h-2 w-full max-w-[120px] overflow-hidden rounded-full bg-[#ead8c4]/60">
-                          <div
-                            className="absolute inset-y-0 left-0 rounded-full bg-[#c89b6d]"
-                            style={{ width: `${task.progressPercent}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-semibold text-[#ad7a46]">
-                          {task.progressPercent}%
-                        </span>
-                      </div>
                     </td>
                   </tr>
                 ))

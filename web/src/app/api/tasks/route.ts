@@ -37,6 +37,17 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const payload = taskUpsertSchema.parse(body);
+  const sanitizedPayload = {
+    ...payload,
+    projectName: payload.projectName.trim(),
+    title: payload.title.trim(),
+    assigneeName: payload.assigneeName.trim(),
+    detailUrl: payload.detailUrl?.trim() || undefined,
+    notes: payload.notes?.trim() || undefined,
+    startDate: payload.startDate?.trim() || undefined,
+    dueDate: payload.dueDate?.trim() || undefined,
+    doneDate: payload.doneDate?.trim() || undefined,
+  };
   const actorId =
     session.user.id ??
     session.user.email ??
@@ -55,13 +66,7 @@ export async function POST(request: Request) {
     details: "タスクを登録しました。",
   };
 
-  const task = await saveTask(
-    {
-      ...payload,
-      createdBy: payload.createdBy || actorName,
-    },
-    { historyEvents: [historyEvent] },
-  );
+  const task = await saveTask(sanitizedPayload, { historyEvents: [historyEvent] });
 
   return NextResponse.json({ data: task }, { status: 201 });
 }

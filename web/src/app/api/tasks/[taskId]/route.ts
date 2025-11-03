@@ -51,15 +51,38 @@ export async function PATCH(
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
 
+  const trimOrUndefined = (
+    value: string | undefined,
+    fallback: string | undefined,
+  ) => {
+    if (value === undefined) return fallback;
+    const trimmed = value.trim();
+    return trimmed === "" ? undefined : trimmed;
+  };
+
+  const trimOrFallback = (
+    value: string | undefined,
+    fallback: string,
+  ) => {
+    if (value === undefined) return fallback;
+    const trimmed = value.trim();
+    return trimmed === "" ? fallback : trimmed;
+  };
+
   const taskPayload: TaskUpsertInput = {
     ...existingTask,
     ...payload,
     taskId,
+    projectName: trimOrFallback(payload.projectName, existingTask.projectName),
+    title: trimOrFallback(payload.title, existingTask.title),
+    assigneeName: trimOrFallback(payload.assigneeName, existingTask.assigneeName),
+    startDate: trimOrUndefined(payload.startDate, existingTask.startDate),
+    dueDate: trimOrUndefined(payload.dueDate, existingTask.dueDate),
+    doneDate: trimOrUndefined(payload.doneDate, existingTask.doneDate),
+    detailUrl: trimOrUndefined(payload.detailUrl, existingTask.detailUrl),
+    notes: trimOrUndefined(payload.notes, existingTask.notes),
     createdAt: existingTask.createdAt,
-    createdBy: existingTask.createdBy,
     history: existingTask.history,
-    links: payload.links ?? existingTask.links,
-    watchers: payload.watchers ?? existingTask.watchers,
   };
 
   const actorId =
@@ -93,17 +116,22 @@ export async function PATCH(
     );
   }
 
-  if (taskPayload.progressPercent !== existingTask.progressPercent) {
-    registerChange(
-      "update",
-      `進捗率を ${existingTask.progressPercent}% から ${taskPayload.progressPercent}% に更新`,
-    );
-  }
-
   if ((taskPayload.dueDate ?? "") !== (existingTask.dueDate ?? "")) {
     const before = existingTask.dueDate ?? "未設定";
     const after = taskPayload.dueDate ?? "未設定";
     registerChange("update", `期限を ${before} から ${after} に変更`);
+  }
+
+  if ((taskPayload.startDate ?? "") !== (existingTask.startDate ?? "")) {
+    const before = existingTask.startDate ?? "未設定";
+    const after = taskPayload.startDate ?? "未設定";
+    registerChange("update", `開始日を ${before} から ${after} に変更`);
+  }
+
+  if ((taskPayload.doneDate ?? "") !== (existingTask.doneDate ?? "")) {
+    const before = existingTask.doneDate ?? "未設定";
+    const after = taskPayload.doneDate ?? "未設定";
+    registerChange("update", `終了日を ${before} から ${after} に変更`);
   }
 
   if (taskPayload.priority !== existingTask.priority) {
@@ -113,25 +141,14 @@ export async function PATCH(
     );
   }
 
-  const normalizeWatcherList = (list: string[]) =>
-    list
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-      .sort()
-      .join("|");
-  if (
-    normalizeWatcherList(taskPayload.watchers) !==
-    normalizeWatcherList(existingTask.watchers)
-  ) {
-    const before =
-      existingTask.watchers.length > 0
-        ? existingTask.watchers.join(", ")
-        : "未設定";
-    const after =
-      taskPayload.watchers.length > 0
-        ? taskPayload.watchers.join(", ")
-        : "未設定";
-    registerChange("update", `ウォッチャーを ${before} から ${after} に更新`);
+  if ((taskPayload.detailUrl ?? "") !== (existingTask.detailUrl ?? "")) {
+    const before = existingTask.detailUrl ?? "未設定";
+    const after = taskPayload.detailUrl ?? "未設定";
+    registerChange("update", `詳細URLを ${before} から ${after} に更新`);
+  }
+
+  if ((taskPayload.notes ?? "") !== (existingTask.notes ?? "")) {
+    registerChange("comment", "備考を更新しました。");
   }
 
   const updatedTask = await saveTask(taskPayload, { historyEvents });

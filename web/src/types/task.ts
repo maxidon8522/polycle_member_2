@@ -8,11 +8,6 @@ export type TaskStatus =
 
 export type TaskPriority = "高" | "中" | "低";
 
-export interface TaskLink {
-  label?: string;
-  url: string;
-}
-
 export interface TaskHistoryEvent {
   id: string;
   taskId: string;
@@ -27,25 +22,16 @@ export interface Task {
   taskId: string;
   projectName: string;
   title: string;
-  description: string;
   assigneeName: string;
-  assigneeEmail: string;
-  slackUserId?: string;
-  category?: string;
-  taskType?: string;
   status: TaskStatus;
-  progressPercent: number;
   priority: TaskPriority;
-  importance?: string;
   startDate?: string;
   dueDate?: string;
   doneDate?: string;
-  links: TaskLink[];
+  detailUrl?: string;
   notes?: string;
-  createdBy: string;
   createdAt: string;
   updatedAt: string;
-  watchers: string[];
   history: TaskHistoryEvent[];
 }
 

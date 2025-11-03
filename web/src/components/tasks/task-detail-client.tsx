@@ -18,12 +18,6 @@ const TASK_STATUS_OPTIONS: Task["status"][] = [
 
 const TASK_PRIORITY_OPTIONS: Task["priority"][] = ["高", "中", "低"];
 
-const parseWatchers = (raw: string): string[] =>
-  raw
-    .split(/[\n,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
 interface TaskDetailClientProps {
   task: Task;
 }
@@ -39,10 +33,11 @@ export const TaskDetailClient = ({ task }: TaskDetailClientProps) => {
 
   const [formState, setFormState] = useState({
     status: task.status,
-    progressPercent: String(task.progressPercent ?? 0),
-    dueDate: task.dueDate ?? "",
     priority: task.priority,
-    watchers: task.watchers.join(", "),
+    dueDate: task.dueDate ?? "",
+    startDate: task.startDate ?? "",
+    doneDate: task.doneDate ?? "",
+    detailUrl: task.detailUrl ?? "",
     notes: task.notes ?? "",
   });
 
@@ -69,12 +64,12 @@ export const TaskDetailClient = ({ task }: TaskDetailClientProps) => {
           },
           body: JSON.stringify({
             status: formState.status,
-            progressPercent:
-              Number.parseInt(formState.progressPercent, 10) || 0,
-            dueDate: formState.dueDate || undefined,
             priority: formState.priority,
-            watchers: parseWatchers(formState.watchers),
-            notes: formState.notes,
+            startDate: formState.startDate,
+            dueDate: formState.dueDate,
+            doneDate: formState.doneDate,
+            detailUrl: formState.detailUrl.trim(),
+            notes: formState.notes.trim(),
           }),
         });
 
@@ -95,10 +90,11 @@ export const TaskDetailClient = ({ task }: TaskDetailClientProps) => {
           setCurrentTask(updatedTask);
           setFormState({
             status: updatedTask.status,
-            progressPercent: String(updatedTask.progressPercent ?? 0),
-            dueDate: updatedTask.dueDate ?? "",
             priority: updatedTask.priority,
-            watchers: updatedTask.watchers.join(", "),
+            dueDate: updatedTask.dueDate ?? "",
+            startDate: updatedTask.startDate ?? "",
+            doneDate: updatedTask.doneDate ?? "",
+            detailUrl: updatedTask.detailUrl ?? "",
             notes: updatedTask.notes ?? "",
           });
         }
@@ -123,7 +119,7 @@ export const TaskDetailClient = ({ task }: TaskDetailClientProps) => {
           {currentTask.title ?? "タスク詳細"}
         </h1>
         <p className="mt-1 text-sm text-[#7f6b5a]">
-          状態変更・コメント履歴・ウォッチャー管理をここで行います。
+          ステータスや期限、備考を更新すると履歴に記録されます。
         </p>
       </div>
 
@@ -167,102 +163,61 @@ export const TaskDetailClient = ({ task }: TaskDetailClientProps) => {
                   </select>
                 </dd>
               </div>
-              <div className="flex items-center justify-between">
-                <dt className="text-xs uppercase text-[#ad7a46]">進捗</dt>
-                <dd className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    name="progressPercent"
-                    value={formState.progressPercent}
-                    onChange={handleChange}
-                    min={0}
-                    max={100}
-                    className="w-16 rounded-lg border border-[#ead8c4] bg-white px-2 py-1 text-xs text-[#3d3128] shadow-inner focus:border-[#c89b6d] focus:outline-none focus:ring-2 focus:ring-[#f1e6d8]"
-                  />
-                  <span className="text-xs font-semibold text-[#ad7a46]">%</span>
-                </dd>
-              </div>
-              <DetailItem
-                label="進捗バー"
-                value={`${currentTask.progressPercent}%`}
-              />
-              <DetailItem
-                label="重要度"
-                value={currentTask.importance ?? "未設定"}
-              />
             </dl>
           </Card>
 
           <Card title="スケジュール">
-            <dl className="space-y-3 text-sm">
-              <DetailItem
-                label="着手日"
-                value={currentTask.startDate ?? "-"}
+            <div className="space-y-3 text-sm">
+              <LabeledInput
+                label="開始日"
+                name="startDate"
+                type="date"
+                value={formState.startDate}
+                onChange={handleChange}
               />
-              <div className="flex items-center justify-between">
-                <dt className="text-xs uppercase text-[#ad7a46]">期限</dt>
-                <dd>
-                  <input
-                    type="date"
-                    name="dueDate"
-                    value={formState.dueDate}
-                    onChange={handleChange}
-                    className="rounded-lg border border-[#ead8c4] bg-white px-3 py-1 text-xs text-[#3d3128] shadow-inner focus:border-[#c89b6d] focus:outline-none focus:ring-2 focus:ring-[#f1e6d8]"
-                  />
-                </dd>
-              </div>
-              <DetailItem
-                label="完了日"
-                value={currentTask.doneDate ?? "-"}
+              <LabeledInput
+                label="期限"
+                name="dueDate"
+                type="date"
+                value={formState.dueDate}
+                onChange={handleChange}
               />
-            </dl>
+              <LabeledInput
+                label="終了日"
+                name="doneDate"
+                type="date"
+                value={formState.doneDate}
+                onChange={handleChange}
+              />
+            </div>
           </Card>
 
-          <Card title="ウォッチャー">
+          <Card title="詳細URL">
             <div className="space-y-3 text-sm text-[#5b4c40]">
-              <textarea
-                name="watchers"
-                value={formState.watchers}
+              <input
+                type="url"
+                name="detailUrl"
+                value={formState.detailUrl}
                 onChange={handleChange}
-                rows={4}
+                placeholder="https://example.com/task-detail"
                 className="w-full rounded-xl border border-[#ead8c4] bg-white px-3 py-2 text-sm text-[#3d3128] shadow-inner focus:border-[#c89b6d] focus:outline-none focus:ring-2 focus:ring-[#f1e6d8]"
-                placeholder="山田太郎, 佐藤花子"
               />
               <p className="text-xs text-[#b59b85]">
-                カンマまたは改行で区切ってください。
+                入力しない場合は空欄のままで構いません。
               </p>
             </div>
           </Card>
         </div>
 
-        <Card title="説明 / 備考">
-          <div className="space-y-4 text-sm text-[#5b4c40]">
-            <p>{currentTask.description || "説明未入力"}</p>
-            <textarea
-              name="notes"
-              value={formState.notes}
-              onChange={handleChange}
-              rows={4}
-              className="w-full rounded-xl border border-[#ead8c4] bg-white px-3 py-2 text-sm text-[#3d3128] shadow-inner focus:border-[#c89b6d] focus:outline-none focus:ring-2 focus:ring-[#f1e6d8]"
-              placeholder="備考を入力"
-            />
-            {currentTask.links.length > 0 && (
-              <ul className="list-disc pl-5 text-[#5b4c40] marker:text-[#c89b6d]">
-                {currentTask.links.map((link, index) => (
-                  <li key={`${link.url}-${index}`}>
-                    <a
-                      href={link.url}
-                      className="font-semibold text-[#ad7a46] underline-offset-4 hover:underline"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {link.label ?? link.url}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        <Card title="備考">
+          <textarea
+            name="notes"
+            value={formState.notes}
+            onChange={handleChange}
+            rows={6}
+            placeholder="共有したいメモがあれば入力してください。"
+            className="w-full rounded-xl border border-[#ead8c4] bg-white px-3 py-2 text-sm text-[#3d3128] shadow-inner focus:border-[#c89b6d] focus:outline-none focus:ring-2 focus:ring-[#f1e6d8]"
+          />
         </Card>
 
         <div className="flex items-center gap-4 pt-2">
@@ -285,7 +240,7 @@ export const TaskDetailClient = ({ task }: TaskDetailClientProps) => {
         <div className="space-y-3 text-sm text-[#5b4c40]">
           {history.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[#ead8c4] bg-[#fffaf5] px-4 py-6 text-center text-[#b59b85]">
-              履歴がありません。状態変更・コメント追加時に自動で記録されます。
+              履歴がありません。更新すると自動で記録されます。
             </div>
           ) : (
             <ol className="relative ml-3 border-l border-[#ead8c4] pl-5">
@@ -321,3 +276,30 @@ const DetailItem = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
+const LabeledInput = ({
+  label,
+  name,
+  value,
+  onChange,
+  type,
+}: {
+  label: string;
+  name: string;
+  value: string;
+  type: "date" | "text";
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}) => (
+  <div className="flex flex-col gap-1 text-sm">
+    <label className="text-xs font-medium text-[#ad7a46]" htmlFor={name}>
+      {label}
+    </label>
+    <input
+      id={name}
+      name={name}
+      type={type}
+      value={value}
+      onChange={onChange}
+      className="rounded-xl border border-[#ead8c4] bg-white px-3 py-2 text-[#3d3128] shadow-inner focus:border-[#c89b6d] focus:outline-none focus:ring-2 focus:ring-[#f1e6d8]"
+    />
+  </div>
+);
