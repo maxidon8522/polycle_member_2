@@ -233,7 +233,7 @@ const loadDailyReportCollection = async (): Promise<DailyReportCollection> => {
 
   const sheetTitles = (metadata.data.sheets ?? [])
     .map((sheet) => sheet.properties?.title)
-    .filter((title): title is string => typeof title === "string" && title);
+    .filter((title): title is string => typeof title === "string" && title.trim().length > 0);
 
   const slugRegistry = new Map<string, string>();
   sheetTitles.forEach((title) => registerSheetTitle(slugRegistry, title));
