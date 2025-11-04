@@ -335,7 +335,7 @@ const buildDailyReportRow = (
     sheetData.header.length > 0
       ? sheetData.header.length
       : DAILY_REPORT_COLUMNS.length;
-  const row = Array.from<string | number>({ length: columnCount }, () => "");
+  const row = Array(columnCount).fill("") as (string | number)[];
   const assign = (key: string, value: string | number | undefined) => {
     const columnIndex = getColumnIndex(sheetData.headerIndex, key);
     if (columnIndex === undefined) {
