@@ -3,6 +3,9 @@ import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { listDailyReports } from "@/server/repositories/daily-reports-repository";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function DailyReportsPage() {
   const reports = await listDailyReports({});
 

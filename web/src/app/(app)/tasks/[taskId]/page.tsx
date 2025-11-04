@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import { listTasks } from "@/server/repositories/tasks-repository";
 import { TaskDetailClient } from "@/components/tasks/task-detail-client";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 interface TaskDetailPageProps {
   params: { taskId: string };
 }

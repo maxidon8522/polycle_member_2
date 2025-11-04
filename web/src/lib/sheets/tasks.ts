@@ -25,6 +25,28 @@ const normalizeHistoryType = (
 const safeString = (value: unknown): string =>
   value === undefined || value === null ? "" : String(value);
 
+const extractErrorMessage = (error: unknown): string => {
+  if (!error) return "";
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  return String(error);
+};
+
+const isRangeParseError = (message: string): boolean => {
+  return message.includes("Unable to parse range");
+};
+
 const splitSheetValues = (values: string[][]) => {
   if (values.length === 0) {
     return { header: [] as string[], rows: [] as string[][] };
@@ -76,7 +98,11 @@ export const readTasks = async (): Promise<string[][]> => {
   const sheets = await getSheetsClient();
 
   try {
-    const response = await retryWithBackoff(async (attempt) => {
+    type SheetResponse = Awaited<
+      ReturnType<typeof sheets.spreadsheets.values.get>
+    >;
+
+    const response = await retryWithBackoff<SheetResponse | null>(async (attempt) => {
       try {
         const range = TASK_SHEET_RANGE;
         if (attempt === 0) {
@@ -91,8 +117,16 @@ export const readTasks = async (): Promise<string[][]> => {
           valueRenderOption: "UNFORMATTED_VALUE",
         });
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
+        const errorMessage = extractErrorMessage(error);
+        if (isRangeParseError(errorMessage)) {
+          if (attempt === 0) {
+            console.warn("sheets.tasks.read.missing_sheet", {
+              spreadsheetId,
+              range: TASK_SHEET_RANGE,
+            });
+          }
+          return null;
+        }
         console.error("sheets.tasks.read.error", {
           attempt,
           spreadsheetId,
@@ -102,9 +136,13 @@ export const readTasks = async (): Promise<string[][]> => {
       }
     });
 
+    if (response === null) {
+      return [];
+    }
+
     return response.data.values ?? [];
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = extractErrorMessage(error);
     console.warn("sheets.tasks.read.failed", {
       spreadsheetId,
       error: errorMessage,
@@ -118,7 +156,11 @@ export const readTaskHistory = async (): Promise<string[][]> => {
   const sheets = await getSheetsClient();
 
   try {
-    const response = await retryWithBackoff(async (attempt) => {
+    type SheetResponse = Awaited<
+      ReturnType<typeof sheets.spreadsheets.values.get>
+    >;
+
+    const response = await retryWithBackoff<SheetResponse | null>(async (attempt) => {
       try {
         if (attempt === 0) {
           console.info("sheets.tasks.history.read.request", {
@@ -132,8 +174,16 @@ export const readTaskHistory = async (): Promise<string[][]> => {
           valueRenderOption: "UNFORMATTED_VALUE",
         });
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
+        const errorMessage = extractErrorMessage(error);
+        if (isRangeParseError(errorMessage)) {
+          if (attempt === 0) {
+            console.warn("sheets.tasks.history.read.missing_sheet", {
+              spreadsheetId,
+              range: TASK_HISTORY_RANGE,
+            });
+          }
+          return null;
+        }
         console.error("sheets.tasks.history.read.error", {
           attempt,
           spreadsheetId,
@@ -143,9 +193,13 @@ export const readTaskHistory = async (): Promise<string[][]> => {
       }
     });
 
+    if (response === null) {
+      return [];
+    }
+
     return response.data.values ?? [];
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = extractErrorMessage(error);
     console.warn("sheets.tasks.history.read.failed", {
       spreadsheetId,
       error: errorMessage,

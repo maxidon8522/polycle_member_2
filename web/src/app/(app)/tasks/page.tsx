@@ -5,6 +5,9 @@ import { listTasks } from "@/server/repositories/tasks-repository";
 import { TasksGantt } from "@/components/tasks/tasks-gantt";
 import type { Task } from "@/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const toTimestamp = (value?: string | null): number | null => {
   if (!value) return null;
   const parsed = Date.parse(value);

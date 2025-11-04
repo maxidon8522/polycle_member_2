@@ -16,6 +16,28 @@ const normalizeSlug = (slug: string) => slug.trim().toLowerCase();
 
 const escapeSheetName = (name: string): string => name.replace(/'/g, "''");
 
+const extractErrorMessage = (error: unknown): string => {
+  if (!error) return "";
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  return String(error);
+};
+
+const isRangeParseError = (message: string): boolean => {
+  return message.includes("Unable to parse range");
+};
+
 const splitSheetValues = (values: string[][]) => {
   if (values.length === 0) {
     return { header: [] as string[], rows: [] as string[][] };
@@ -151,7 +173,11 @@ export const readDailyReportSheet = async (
   const sheetName = escapeSheetName(userSlug);
 
   try {
-    const response = await retryWithBackoff(async (attempt) => {
+    type SheetResponse = Awaited<
+      ReturnType<typeof sheets.spreadsheets.values.get>
+    >;
+
+    const response = await retryWithBackoff<SheetResponse | null>(async (attempt) => {
       try {
         return await sheets.spreadsheets.values.get({
           spreadsheetId,
@@ -159,8 +185,16 @@ export const readDailyReportSheet = async (
           valueRenderOption: "UNFORMATTED_VALUE",
         });
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
+        const errorMessage = extractErrorMessage(error);
+        if (isRangeParseError(errorMessage)) {
+          if (attempt === 0) {
+            console.warn("sheets.daily_reports.read_user.missing_sheet", {
+              spreadsheetId,
+              sheetName: userSlug,
+            });
+          }
+          return null;
+        }
         console.error("sheets.daily_reports.read_user.error", {
           attempt,
           spreadsheetId,
@@ -171,9 +205,13 @@ export const readDailyReportSheet = async (
       }
     });
 
+    if (response === null) {
+      return [];
+    }
+
     return response.data.values ?? [];
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = extractErrorMessage(error);
     console.warn("sheets.daily_reports.read_user.failed", {
       userSlug,
       error: errorMessage,

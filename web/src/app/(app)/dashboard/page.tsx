@@ -16,6 +16,9 @@ import {
 } from "@/server/repositories/daily-reports-repository";
 import { listTasks } from "@/server/repositories/tasks-repository";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const WEEKDAY_LABEL: Record<DailyReport["weekday"], string> = {
   Mon: "月",
   Tue: "火",
