@@ -43,3 +43,27 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
 }
+
+.tasks-gantt svg ._35nLX {
+  stroke: #c89b6d;
+  stroke-width: 1.6;
+  rx: 8;
+  ry: 8;
+}
+
+.tasks-gantt svg ._2q1Kt,
+.tasks-gantt svg ._9w8d5 {
+  fill: #3d3128;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tasks-gantt ._2QjE6,
+.tasks-gantt ._2TfEi {
+  font-size: 0.75rem;
+  color: #5b4c40;
+}
+
+.tasks-gantt svg ._31ERP {
+  stroke-width: 1.2;
+}
