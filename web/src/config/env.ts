@@ -33,7 +33,7 @@ const envSchema = z.object({
 });
 
 const clientEnvSchema = z.object({
-  NEXT_PUBLIC_APP_NAME: z.string().default("Polycle Member 2"),
+  NEXT_PUBLIC_APP_NAME: z.string().default("Polycle Member"),
   NEXT_PUBLIC_DEFAULT_TIMEZONE: z.string().default("Asia/Taipei"),
 });
 
@@ -64,7 +64,7 @@ const parseEnv = () => {
       },
       client: {
         NEXT_PUBLIC_APP_NAME:
-          process.env.NEXT_PUBLIC_APP_NAME ?? "Polycle Member 2",
+          process.env.NEXT_PUBLIC_APP_NAME ?? "Polycle Member",
         NEXT_PUBLIC_DEFAULT_TIMEZONE:
           process.env.NEXT_PUBLIC_DEFAULT_TIMEZONE ?? "Asia/Taipei",
       },

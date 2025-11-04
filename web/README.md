@@ -1,6 +1,6 @@
 ## Overview
 
-Polycle Member 2 is a Next.js 16 application that unifies daily report (DR) operations and task management with Google Sheets and Slack integrations.
+Polycle Member is a Next.js 16 application that unifies daily report (DR) operations and task management with Google Sheets and Slack integrations.
 
 ## Getting Started
 

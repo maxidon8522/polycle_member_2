@@ -51,6 +51,11 @@ body {
   ry: 8;
 }
 
+.tasks-gantt svg ._3zRJQ {
+  fill: #3d3128 !important;
+  font-weight: 600;
+}
+
 .tasks-gantt svg ._2q1Kt,
 .tasks-gantt svg ._9w8d5 {
   fill: #3d3128;
