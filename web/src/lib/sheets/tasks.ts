@@ -5,7 +5,7 @@ import { getSheetsClient } from "./google";
 
 const TASK_SHEET_NAME = "tasks";
 const TASK_HISTORY_SHEET_NAME = "task_history";
-const TASK_SHEET_RANGE = `'${TASK_SHEET_NAME}'!A:M`;
+const TASK_SHEET_RANGE = `'${TASK_SHEET_NAME}'!A:N`;
 const TASK_HISTORY_RANGE = `'${TASK_HISTORY_SHEET_NAME}'!A:G`;
 const KNOWN_HISTORY_TYPES: readonly TaskHistoryEvent["type"][] = [
   "status_change",
@@ -211,6 +211,14 @@ const mapRowToTask = (
     return null;
   }
 
+  const tagsCell = safeString(row[11]);
+  const tags = tagsCell
+    ? tagsCell
+        .split(/\s+/)
+        .map((tag) => tag.replace(/^#/, "").trim())
+        .filter(Boolean)
+    : [];
+
   return {
     taskId,
     projectName: safeString(row[1]),
@@ -223,8 +231,9 @@ const mapRowToTask = (
     detailUrl: safeString(row[8]) || undefined,
     notes: safeString(row[9]) || undefined,
     priority: safeString(row[10]) as Task["priority"],
-    createdAt: safeString(row[11]) || "",
-    updatedAt: safeString(row[12]) || "",
+    tags,
+    createdAt: safeString(row[12]) || "",
+    updatedAt: safeString(row[13]) || "",
     history,
   };
 };
@@ -241,6 +250,7 @@ const toTaskRow = (task: Task): (string | number)[] => [
   task.detailUrl ?? "",
   task.notes ?? "",
   task.priority,
+  (task.tags ?? []).map((tag) => tag.trim()).filter(Boolean).join(" "),
   task.createdAt ?? "",
   task.updatedAt ?? "",
 ];
@@ -318,7 +328,7 @@ export const upsertTask = async (task: Task): Promise<void> => {
   const payload = [toTaskRow(task)];
 
   if (rowIndex) {
-    const range = `'${TASK_SHEET_NAME}'!A${rowIndex}:M${rowIndex}`;
+    const range = `'${TASK_SHEET_NAME}'!A${rowIndex}:N${rowIndex}`;
     await retryWithBackoff(async (attempt) => {
       try {
         await sheets.spreadsheets.values.update({
@@ -328,20 +338,20 @@ export const upsertTask = async (task: Task): Promise<void> => {
           requestBody: { values: payload },
         });
       } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          console.error("sheets.tasks.update.error", {
-            attempt,
-            spreadsheetId,
-            range,
-            taskId: task.taskId,
-            error: errorMessage,
-          });
-          throw error;
-        }
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error("sheets.tasks.update.error", {
+          attempt,
+          spreadsheetId,
+          range,
+          taskId: task.taskId,
+          error: errorMessage,
+        });
+        throw error;
+      }
     });
   } else {
-    const range = `'${TASK_SHEET_NAME}'!A:M`;
+    const range = `'${TASK_SHEET_NAME}'!A:N`;
     await retryWithBackoff(async (attempt) => {
       try {
         await sheets.spreadsheets.values.append({
@@ -352,17 +362,17 @@ export const upsertTask = async (task: Task): Promise<void> => {
           requestBody: { values: payload },
         });
       } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          console.error("sheets.tasks.append.error", {
-            attempt,
-            spreadsheetId,
-            range,
-            taskId: task.taskId,
-            error: errorMessage,
-          });
-          throw error;
-        }
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error("sheets.tasks.append.error", {
+          attempt,
+          spreadsheetId,
+          range,
+          taskId: task.taskId,
+          error: errorMessage,
+        });
+        throw error;
+      }
     });
   }
 };

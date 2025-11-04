@@ -33,6 +33,7 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   history: TaskHistoryEvent[];
+  tags?: string[];
 }
 
 export interface TaskUpsertInput

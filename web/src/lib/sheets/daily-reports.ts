@@ -6,12 +6,34 @@ import { retryWithBackoff } from "@/lib/retry";
 import { getWeekStart, getWeekdayCode } from "@/lib/time";
 import { getSheetsClient } from "./google";
 
-const DAILY_REPORT_RESERVED_COLUMNS = 7; // O〜U
-
 const safeString = (value: unknown): string =>
   value === undefined || value === null ? "" : String(value);
 
-const normalizeSlug = (slug: string) => slug.trim().toLowerCase();
+const normalizeSlug = (slug: string): string => slug.trim().toLowerCase();
+
+const humanizeSlug = (slug: string): string => {
+  const segments = slug
+    .split(/[-_]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (segments.length === 0) {
+    return slug;
+  }
+  return segments
+    .map(
+      (part) => part.charAt(0).toUpperCase() + part.slice(1),
+    )
+    .join(" ");
+};
+
+const parseTags = (value: string): string[] =>
+  value
+    .split(/\s+/)
+    .map((tag) => tag.replace(/^#/, "").trim())
+    .filter(Boolean);
+
+const joinTags = (tags: string[] | undefined): string =>
+  (tags ?? []).map((tag) => tag.trim()).filter(Boolean).join(" ");
 
 const extractErrorMessage = (error: unknown): string => {
   if (!error) return "";
@@ -36,54 +58,33 @@ const isRangeParseError = (message: string): boolean => {
 };
 
 const DAILY_REPORT_SHEET_NAME = "daily_reports";
-const DAILY_REPORT_VALUE_RANGE = `'${DAILY_REPORT_SHEET_NAME}'!A:U`;
+const DAILY_REPORT_COLUMNS = [
+  "date",
+  "satisfactionToday",
+  "doneToday",
+  "goodMoreBackground",
+  "moreNext",
+  "todoTomorrow",
+  "wishTomorrow",
+  "personalNews",
+  "tags",
+  "source",
+  "slackTs",
+  "createdAt",
+  "updatedAt",
+  "userSlug",
+];
 const DAILY_REPORT_CACHE_TTL_MS = 15_000;
 
-let dailyReportValuesCache: { timestamp: number; values: string[][] } | null =
-  null;
-
-const getCachedDailyReportValues = (): string[][] | null => {
-  if (!dailyReportValuesCache) {
-    return null;
+const columnIndexToLetter = (index: number): string => {
+  let n = index + 1;
+  let result = "";
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    n = Math.floor((n - 1) / 26);
   }
-  const age = Date.now() - dailyReportValuesCache.timestamp;
-  if (age > DAILY_REPORT_CACHE_TTL_MS) {
-    dailyReportValuesCache = null;
-    return null;
-  }
-  return dailyReportValuesCache.values;
-};
-
-const setCachedDailyReportValues = (values: string[][]) => {
-  dailyReportValuesCache = { timestamp: Date.now(), values };
-};
-
-const invalidateDailyReportCache = () => {
-  dailyReportValuesCache = null;
-};
-
-const humanizeSlug = (slug: string): string => {
-  const segments = slug
-    .split(/[-_]/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (segments.length === 0) {
-    return slug;
-  }
-  return segments
-    .map(
-      (part) => part.charAt(0).toUpperCase() + part.slice(1),
-    )
-    .join(" ");
-};
-
-const pickFirstNonEmpty = (...values: (string | undefined)[]): string => {
-  for (const value of values) {
-    if (value && value.trim().length > 0) {
-      return value;
-    }
-  }
-  return "";
+  return result || "A";
 };
 
 const splitSheetValues = (values: string[][]) => {
@@ -98,69 +99,165 @@ const splitSheetValues = (values: string[][]) => {
   };
 };
 
-const toDailyReportRow = (report: DailyReport): (string | number)[] => {
-  const base = [
-    report.date,
-    report.satisfactionToday ?? "",
-    report.doneToday ?? "",
-    report.goodMoreBackground ?? "",
-    report.moreNext ?? "",
-    report.todoTomorrow ?? "",
-    report.wishTomorrow ?? "",
-    report.personalNews ?? "",
-    (report.tags ?? []).map((tag) => tag.trim()).filter(Boolean).join(" "),
-    report.source ?? "manual",
-    report.slackTs ?? "",
-    report.createdAt ?? "",
-    report.updatedAt ?? "",
-    report.userSlug ?? "",
-  ];
+const buildHeaderIndex = (header: string[]): Record<string, number> => {
+  const index: Record<string, number> = {};
+  header.forEach((raw, columnIndex) => {
+    const key = safeString(raw).trim().toLowerCase();
+    if (!key) {
+      return;
+    }
+    if (!(key in index)) {
+      index[key] = columnIndex;
+    }
+  });
+  return index;
+};
 
-  const reserved = Array.from(
-    { length: DAILY_REPORT_RESERVED_COLUMNS },
-    () => "",
-  );
+const getColumnIndex = (
+  headerIndex: Record<string, number>,
+  columnName: string,
+): number | undefined => {
+  return headerIndex[columnName.toLowerCase()];
+};
 
-  return [...base, ...reserved];
+const getCell = (
+  row: string[],
+  headerIndex: Record<string, number>,
+  columnName: string,
+): string => {
+  const columnIndex = getColumnIndex(headerIndex, columnName);
+  if (columnIndex === undefined) {
+    return "";
+  }
+  return safeString(row[columnIndex]);
+};
+
+interface DailyReportSheetData {
+  header: string[];
+  headerIndex: Record<string, number>;
+  rows: string[][];
+}
+
+let dailyReportCache:
+  | { timestamp: number; data: DailyReportSheetData }
+  | null = null;
+
+const getCachedDailyReportData = (): DailyReportSheetData | null => {
+  if (!dailyReportCache) {
+    return null;
+  }
+  const age = Date.now() - dailyReportCache.timestamp;
+  if (age > DAILY_REPORT_CACHE_TTL_MS) {
+    dailyReportCache = null;
+    return null;
+  }
+  return dailyReportCache.data;
+};
+
+const setCachedDailyReportData = (data: DailyReportSheetData) => {
+  dailyReportCache = { timestamp: Date.now(), data };
+};
+
+const invalidateDailyReportCache = () => {
+  dailyReportCache = null;
+};
+
+const ensureSheetData = (values: string[][]): DailyReportSheetData => {
+  const { header, rows } = splitSheetValues(values);
+  const effectiveHeader =
+    header.length > 0 ? header : [...DAILY_REPORT_COLUMNS];
+  const headerIndex = buildHeaderIndex(effectiveHeader);
+  return {
+    header: effectiveHeader,
+    headerIndex,
+    rows,
+  };
+};
+
+const readDailyReportSheetData = async (): Promise<DailyReportSheetData> => {
+  const cached = getCachedDailyReportData();
+  if (cached) {
+    return cached;
+  }
+
+  const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
+  const sheets = await getSheetsClient();
+
+  try {
+    const values = await retryWithBackoff<string[][] | null>(async (attempt) => {
+      try {
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'${DAILY_REPORT_SHEET_NAME}'!A:U`,
+          valueRenderOption: "UNFORMATTED_VALUE",
+        });
+        return response.data.values ?? [];
+      } catch (error) {
+        const errorMessage = extractErrorMessage(error);
+        if (isRangeParseError(errorMessage)) {
+          if (attempt === 0) {
+            console.warn("sheets.daily_reports.read.missing_sheet", {
+              spreadsheetId,
+              sheet: DAILY_REPORT_SHEET_NAME,
+            });
+          }
+          return null;
+        }
+        console.error("sheets.daily_reports.read.error", {
+          attempt,
+          spreadsheetId,
+          sheet: DAILY_REPORT_SHEET_NAME,
+          error: errorMessage,
+        });
+        throw error;
+      }
+    });
+
+    const data = ensureSheetData(values ?? []);
+    setCachedDailyReportData(data);
+    return data;
+  } catch (error) {
+    const errorMessage = extractErrorMessage(error);
+    console.warn("sheets.daily_reports.read.failed", {
+      sheet: DAILY_REPORT_SHEET_NAME,
+      error: errorMessage,
+    });
+    const fallback = ensureSheetData([]);
+    setCachedDailyReportData(fallback);
+    return fallback;
+  }
 };
 
 const mapRowToDailyReport = (
   row: string[],
-  fallbackSlug = "",
+  sheetData: DailyReportSheetData,
 ): DailyReport | null => {
-  const date = safeString(row[0]);
+  const { headerIndex } = sheetData;
+  const date = getCell(row, headerIndex, "date");
   if (!date) {
     return null;
   }
 
-  const slugCell = safeString(row[13]);
-  const rawSlug = slugCell || fallbackSlug;
+  const rawSlug = getCell(row, headerIndex, "userSlug");
   const slug = normalizeSlug(rawSlug);
   if (!slug) {
     return null;
   }
 
-  const tagsCell = safeString(row[8]);
-  const tags = tagsCell
-    ? tagsCell
-        .split(/\s+/)
-        .map((tag) => tag.replace(/^#/, "").trim())
-        .filter(Boolean)
-    : [];
+  const tagsCell = getCell(row, headerIndex, "tags");
+  const sourceCell = getCell(row, headerIndex, "source");
 
-  const sourceCell = safeString(row[9]) as DailyReportSource;
-  const source: DailyReportSource =
-    sourceCell === "slack_ingest" ? "slack_ingest" : "manual";
-
-  const displayNameCell = safeString(row[14]);
   const resolvedUserName =
-    pickFirstNonEmpty(
-      displayNameCell,
-      slugCell,
-      fallbackSlug,
-      humanizeSlug(slug),
-      slug,
-    ) || slug;
+    getCell(row, headerIndex, "userName") ||
+    getCell(row, headerIndex, "displayName") ||
+    rawSlug ||
+    humanizeSlug(slug) ||
+    slug;
+
+  const source: DailyReportSource =
+    sourceCell === "slack_ingest" || sourceCell === "web_form"
+      ? (sourceCell as DailyReportSource)
+      : "manual";
 
   return {
     reportId: `dr_${slug}_${date}`,
@@ -172,18 +269,18 @@ const mapRowToDailyReport = (
     slackUserId: "",
     slackTeamId: "",
     channelId: "",
-    satisfactionToday: safeString(row[1]),
-    doneToday: safeString(row[2]),
-    goodMoreBackground: safeString(row[3]),
-    moreNext: safeString(row[4]),
-    todoTomorrow: safeString(row[5]),
-    wishTomorrow: safeString(row[6]),
-    personalNews: safeString(row[7]),
-    tags,
+    satisfactionToday: getCell(row, headerIndex, "satisfactionToday"),
+    doneToday: getCell(row, headerIndex, "doneToday"),
+    goodMoreBackground: getCell(row, headerIndex, "goodMoreBackground"),
+    moreNext: getCell(row, headerIndex, "moreNext"),
+    todoTomorrow: getCell(row, headerIndex, "todoTomorrow"),
+    wishTomorrow: getCell(row, headerIndex, "wishTomorrow"),
+    personalNews: getCell(row, headerIndex, "personalNews"),
+    tags: parseTags(tagsCell),
     source,
-    slackTs: safeString(row[10]) || undefined,
-    createdAt: safeString(row[11]),
-    updatedAt: safeString(row[12]),
+    slackTs: getCell(row, headerIndex, "slackTs") || undefined,
+    createdAt: getCell(row, headerIndex, "createdAt"),
+    updatedAt: getCell(row, headerIndex, "updatedAt"),
   };
 };
 
@@ -193,11 +290,18 @@ interface DailyReportRowMatch {
 }
 
 const findDailyReportRowMatch = (
-  rows: string[][],
+  sheetData: DailyReportSheetData,
   date: string,
   userSlug: string,
 ): DailyReportRowMatch | null => {
+  const { rows, headerIndex } = sheetData;
   if (rows.length === 0) {
+    return null;
+  }
+
+  const dateColumn = getColumnIndex(headerIndex, "date");
+  const slugColumn = getColumnIndex(headerIndex, "userSlug");
+  if (dateColumn === undefined || slugColumn === undefined) {
     return null;
   }
 
@@ -205,18 +309,68 @@ const findDailyReportRowMatch = (
 
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index] ?? [];
-    const rowDate = safeString(row[0]);
-    const rowSlug = safeString(row[13]);
+    const rowDate = safeString(row[dateColumn]);
+    const rowSlug = normalizeSlug(safeString(row[slugColumn]));
 
-    if (rowDate === date && normalizeSlug(rowSlug || userSlug) === targetSlug) {
+    if (!rowDate) {
+      continue;
+    }
+
+    if (rowDate === date && rowSlug === targetSlug) {
       return {
-        sheetRowNumber: index + 2,
+        sheetRowNumber: index + 2, // 1-based row number accounting for header
         row,
       };
     }
   }
 
   return null;
+};
+
+const buildDailyReportRow = (
+  report: DailyReport,
+  sheetData: DailyReportSheetData,
+): (string | number)[] => {
+  const columnCount =
+    sheetData.header.length > 0
+      ? sheetData.header.length
+      : DAILY_REPORT_COLUMNS.length;
+  const row = Array.from<string | number>({ length: columnCount }, () => "");
+  const assign = (key: string, value: string | number | undefined) => {
+    const columnIndex = getColumnIndex(sheetData.headerIndex, key);
+    if (columnIndex === undefined) {
+      return;
+    }
+    row[columnIndex] = value ?? "";
+  };
+
+  assign("date", report.date);
+  assign("satisfactionToday", report.satisfactionToday ?? "");
+  assign("doneToday", report.doneToday ?? "");
+  assign("goodMoreBackground", report.goodMoreBackground ?? "");
+  assign("moreNext", report.moreNext ?? "");
+  assign("todoTomorrow", report.todoTomorrow ?? "");
+  assign("wishTomorrow", report.wishTomorrow ?? "");
+  assign("personalNews", report.personalNews ?? "");
+  assign("tags", joinTags(report.tags));
+  assign("source", report.source ?? "manual");
+  assign("slackTs", report.slackTs ?? "");
+  assign("createdAt", report.createdAt ?? "");
+  assign("updatedAt", report.updatedAt ?? "");
+  assign("userSlug", report.userSlug ?? "");
+
+  return row;
+};
+
+const toColumnRange = (
+  columnCount: number,
+  rowNumber?: number,
+): string => {
+  const lastColumnLetter = columnIndexToLetter(Math.max(columnCount - 1, 0));
+  if (rowNumber && rowNumber > 0) {
+    return `'${DAILY_REPORT_SHEET_NAME}'!A${rowNumber}:${lastColumnLetter}${rowNumber}`;
+  }
+  return `'${DAILY_REPORT_SHEET_NAME}'!A:${lastColumnLetter}`;
 };
 
 export interface DailyReportQueryOptions {
@@ -227,67 +381,12 @@ export interface DailyReportQueryOptions {
   tags?: string[];
 }
 
-const readDailyReportValues = async (): Promise<string[][]> => {
-  const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
-  const sheets = await getSheetsClient();
-  const cached = getCachedDailyReportValues();
-  if (cached) {
-    return cached;
-  }
-
-  try {
-    const values = await retryWithBackoff<string[][] | null>(async (attempt) => {
-      try {
-        const response = await sheets.spreadsheets.values.get({
-          spreadsheetId,
-          range: DAILY_REPORT_VALUE_RANGE,
-          valueRenderOption: "UNFORMATTED_VALUE",
-        });
-        return response.data.values ?? [];
-      } catch (error) {
-        const errorMessage = extractErrorMessage(error);
-        if (isRangeParseError(errorMessage)) {
-          if (attempt === 0) {
-            console.warn("sheets.daily_reports.read.missing_sheet", {
-              spreadsheetId,
-              range: DAILY_REPORT_VALUE_RANGE,
-            });
-          }
-          return null;
-        }
-        console.error("sheets.daily_reports.read.error", {
-          attempt,
-          spreadsheetId,
-          range: DAILY_REPORT_VALUE_RANGE,
-          error: errorMessage,
-        });
-        throw error;
-      }
-    });
-
-    if (values === null) {
-      return [];
-    }
-
-    setCachedDailyReportValues(values);
-    return values;
-  } catch (error) {
-    const errorMessage = extractErrorMessage(error);
-    console.warn("sheets.daily_reports.read.failed", {
-      range: DAILY_REPORT_VALUE_RANGE,
-      error: errorMessage,
-    });
-    return [];
-  }
-};
-
 export const findRowIndexByDateAndSlug = async (
   dateISO: string,
   userSlug: string,
 ): Promise<number | null> => {
-  const values = await readDailyReportValues();
-  const { rows } = splitSheetValues(values);
-  const match = findDailyReportRowMatch(rows, dateISO, userSlug);
+  const sheetData = await readDailyReportSheetData();
+  const match = findDailyReportRowMatch(sheetData, dateISO, userSlug);
   return match ? match.sheetRowNumber : null;
 };
 
@@ -295,14 +394,12 @@ export const getSlackTimestampForReport = async (
   userSlug: string,
   date: string,
 ): Promise<string | null> => {
-  const values = await readDailyReportValues();
-  const { rows } = splitSheetValues(values);
-  const match = findDailyReportRowMatch(rows, date, userSlug);
+  const sheetData = await readDailyReportSheetData();
+  const match = findDailyReportRowMatch(sheetData, date, userSlug);
   if (!match) {
     return null;
   }
-  const cell = safeString(match.row[10]);
-  return cell || null;
+  return getCell(match.row, sheetData.headerIndex, "slackTs") || null;
 };
 
 export const setSlackTsOnSheet = async (
@@ -310,9 +407,8 @@ export const setSlackTsOnSheet = async (
   date: string,
   slackTs: string,
 ): Promise<void> => {
-  const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
-  const sheets = await getSheetsClient();
-  const rowIndex = await findRowIndexByDateAndSlug(date, userSlug);
+  const sheetData = await readDailyReportSheetData();
+  const rowIndex = findDailyReportRowMatch(sheetData, date, userSlug);
 
   if (!rowIndex) {
     console.warn("sheets.daily_reports.set_slack_ts.missing_row", {
@@ -322,7 +418,19 @@ export const setSlackTsOnSheet = async (
     return;
   }
 
-  const range = `'${DAILY_REPORT_SHEET_NAME}'!K${rowIndex}:K${rowIndex}`;
+  const slackTsColumnIndex = getColumnIndex(sheetData.headerIndex, "slackTs");
+  if (slackTsColumnIndex === undefined) {
+    console.warn("sheets.daily_reports.set_slack_ts.missing_column", {
+      column: "slackTs",
+    });
+    return;
+  }
+
+  const columnLetter = columnIndexToLetter(slackTsColumnIndex);
+  const range = `'${DAILY_REPORT_SHEET_NAME}'!${columnLetter}${rowIndex.sheetRowNumber}:${columnLetter}${rowIndex.sheetRowNumber}`;
+
+  const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
+  const sheets = await getSheetsClient();
 
   await retryWithBackoff(async (attempt) => {
     try {
@@ -334,8 +442,7 @@ export const setSlackTsOnSheet = async (
       });
       invalidateDailyReportCache();
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = extractErrorMessage(error);
       console.error("sheets.daily_reports.set_slack_ts.error", {
         attempt,
         spreadsheetId,
@@ -352,23 +459,32 @@ export const setSlackTsOnSheet = async (
 export const upsertDailyReport = async (
   report: DailyReport,
 ): Promise<void> => {
+  const sheetData = await readDailyReportSheetData();
   const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
 
-  const values = await readDailyReportValues();
-  const { rows } = splitSheetValues(values);
-  const match = findDailyReportRowMatch(rows, report.date, report.userSlug);
+  const existingMatch = findDailyReportRowMatch(
+    sheetData,
+    report.date,
+    report.userSlug,
+  );
 
   const now = new Date().toISOString();
-  const existingCreatedAt = match ? safeString(match.row[11]) : "";
-  const existingSlackTs = match ? safeString(match.row[10]) : "";
+  const existingCreatedAt = existingMatch
+    ? getCell(existingMatch.row, sheetData.headerIndex, "createdAt")
+    : "";
+  const existingSlackTs = existingMatch
+    ? getCell(existingMatch.row, sheetData.headerIndex, "slackTs")
+    : "";
+
+  const normalizedSlug = normalizeSlug(report.userSlug);
 
   const normalized: DailyReport = {
     ...report,
-    reportId: report.reportId || `dr_${report.userSlug}_${report.date}`,
+    reportId: report.reportId || `dr_${normalizedSlug}_${report.date}`,
     weekday: getWeekdayCode(report.date),
-    userSlug: normalizeSlug(report.userSlug),
-    userName: report.userName || report.userSlug,
+    userSlug: normalizedSlug,
+    userName: report.userName || humanizeSlug(normalizedSlug),
     source: report.source ?? "manual",
     tags: report.tags ?? [],
     createdAt: report.createdAt || existingCreatedAt || now,
@@ -376,10 +492,14 @@ export const upsertDailyReport = async (
     slackTs: report.slackTs || existingSlackTs,
   };
 
-  const payload = [toDailyReportRow(normalized)];
+  const payload = [buildDailyReportRow(normalized, sheetData)];
+  const columnCount =
+    sheetData.header.length > 0
+      ? sheetData.header.length
+      : DAILY_REPORT_COLUMNS.length;
 
-  if (match) {
-    const range = `'${DAILY_REPORT_SHEET_NAME}'!A${match.sheetRowNumber}:U${match.sheetRowNumber}`;
+  if (existingMatch) {
+    const range = toColumnRange(columnCount, existingMatch.sheetRowNumber);
     await retryWithBackoff(async (attempt) => {
       try {
         await sheets.spreadsheets.values.update({
@@ -390,8 +510,7 @@ export const upsertDailyReport = async (
         });
         invalidateDailyReportCache();
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
+        const errorMessage = extractErrorMessage(error);
         console.error("sheets.daily_reports.update.error", {
           attempt,
           spreadsheetId,
@@ -405,7 +524,7 @@ export const upsertDailyReport = async (
     return;
   }
 
-  const range = `'${DAILY_REPORT_SHEET_NAME}'!A:U`;
+  const range = toColumnRange(columnCount);
   await retryWithBackoff(async (attempt) => {
     try {
       await sheets.spreadsheets.values.append({
@@ -417,8 +536,7 @@ export const upsertDailyReport = async (
       });
       invalidateDailyReportCache();
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = extractErrorMessage(error);
       console.error("sheets.daily_reports.append.error", {
         attempt,
         spreadsheetId,
@@ -479,10 +597,10 @@ export const fetchDailyReports = async (
     options.weekEnd ??
     formatISO(addDays(parseISO(weekStart), 6), { representation: "date" });
 
-  const values = await readDailyReportValues();
-  const { rows } = splitSheetValues(values);
-  const reports = rows
-    .map((row) => mapRowToDailyReport(row))
+  const sheetData = await readDailyReportSheetData();
+
+  const reports = sheetData.rows
+    .map((row) => mapRowToDailyReport(row, sheetData))
     .filter((report): report is DailyReport => report !== null);
 
   const deduplicatedReports = Array.from(
@@ -521,6 +639,7 @@ export const fetchDailyReports = async (
         report.todoTomorrow,
         report.wishTomorrow,
         report.personalNews,
+        report.tags.join(" "),
       ]
         .join(" ")
         .toLowerCase();

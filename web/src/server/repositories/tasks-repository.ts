@@ -68,6 +68,7 @@ const matchesSearchTerm = (task: Task, term: string): boolean => {
     task.projectName,
     task.assigneeName,
     task.detailUrl ?? "",
+    (task.tags ?? []).join(" "),
   ]
     .join(" ")
     .toLowerCase();
