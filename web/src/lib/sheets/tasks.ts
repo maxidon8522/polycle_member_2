@@ -98,11 +98,7 @@ export const readTasks = async (): Promise<string[][]> => {
   const sheets = await getSheetsClient();
 
   try {
-    type SheetResponse = Awaited<
-      ReturnType<typeof sheets.spreadsheets.values.get>
-    >;
-
-    const response = await retryWithBackoff<SheetResponse | null>(async (attempt) => {
+    const values = await retryWithBackoff<string[][] | null>(async (attempt) => {
       try {
         const range = TASK_SHEET_RANGE;
         if (attempt === 0) {
@@ -111,11 +107,12 @@ export const readTasks = async (): Promise<string[][]> => {
             range,
           });
         }
-        return await sheets.spreadsheets.values.get({
+        const response = await sheets.spreadsheets.values.get({
           spreadsheetId,
           range,
           valueRenderOption: "UNFORMATTED_VALUE",
         });
+        return response.data.values ?? [];
       } catch (error) {
         const errorMessage = extractErrorMessage(error);
         if (isRangeParseError(errorMessage)) {
@@ -136,11 +133,11 @@ export const readTasks = async (): Promise<string[][]> => {
       }
     });
 
-    if (response === null) {
+    if (values === null) {
       return [];
     }
 
-    return response.data.values ?? [];
+    return values;
   } catch (error) {
     const errorMessage = extractErrorMessage(error);
     console.warn("sheets.tasks.read.failed", {
@@ -156,11 +153,7 @@ export const readTaskHistory = async (): Promise<string[][]> => {
   const sheets = await getSheetsClient();
 
   try {
-    type SheetResponse = Awaited<
-      ReturnType<typeof sheets.spreadsheets.values.get>
-    >;
-
-    const response = await retryWithBackoff<SheetResponse | null>(async (attempt) => {
+    const values = await retryWithBackoff<string[][] | null>(async (attempt) => {
       try {
         if (attempt === 0) {
           console.info("sheets.tasks.history.read.request", {
@@ -168,11 +161,12 @@ export const readTaskHistory = async (): Promise<string[][]> => {
             range: TASK_HISTORY_RANGE,
           });
         }
-        return await sheets.spreadsheets.values.get({
+        const response = await sheets.spreadsheets.values.get({
           spreadsheetId,
           range: TASK_HISTORY_RANGE,
           valueRenderOption: "UNFORMATTED_VALUE",
         });
+        return response.data.values ?? [];
       } catch (error) {
         const errorMessage = extractErrorMessage(error);
         if (isRangeParseError(errorMessage)) {
@@ -193,11 +187,11 @@ export const readTaskHistory = async (): Promise<string[][]> => {
       }
     });
 
-    if (response === null) {
+    if (values === null) {
       return [];
     }
 
-    return response.data.values ?? [];
+    return values;
   } catch (error) {
     const errorMessage = extractErrorMessage(error);
     console.warn("sheets.tasks.history.read.failed", {

@@ -173,17 +173,14 @@ export const readDailyReportSheet = async (
   const sheetName = escapeSheetName(userSlug);
 
   try {
-    type SheetResponse = Awaited<
-      ReturnType<typeof sheets.spreadsheets.values.get>
-    >;
-
-    const response = await retryWithBackoff<SheetResponse | null>(async (attempt) => {
+    const values = await retryWithBackoff<string[][] | null>(async (attempt) => {
       try {
-        return await sheets.spreadsheets.values.get({
+        const response = await sheets.spreadsheets.values.get({
           spreadsheetId,
           range: `'${sheetName}'!A:N`,
           valueRenderOption: "UNFORMATTED_VALUE",
         });
+        return response.data.values ?? [];
       } catch (error) {
         const errorMessage = extractErrorMessage(error);
         if (isRangeParseError(errorMessage)) {
@@ -205,11 +202,11 @@ export const readDailyReportSheet = async (
       }
     });
 
-    if (response === null) {
+    if (values === null) {
       return [];
     }
 
-    return response.data.values ?? [];
+    return values;
   } catch (error) {
     const errorMessage = extractErrorMessage(error);
     console.warn("sheets.daily_reports.read_user.failed", {
