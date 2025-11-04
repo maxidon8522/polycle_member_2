@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { listTasks } from "@/server/repositories/tasks-repository";
+import { TasksGantt } from "@/components/tasks/tasks-gantt";
 import type { Task } from "@/types";
 
 const toTimestamp = (value?: string | null): number | null => {
@@ -189,6 +190,13 @@ export default async function TasksPage() {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      <Card
+        title="ガントチャート"
+        description="同じタスクデータを開始日・期限で可視化します。表示対象は開始日または期限が設定されているタスクのみです。"
+      >
+        <TasksGantt tasks={tasks} />
       </Card>
     </div>
   );

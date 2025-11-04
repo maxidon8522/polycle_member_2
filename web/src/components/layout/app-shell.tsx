@@ -60,7 +60,7 @@ export const AppShell = ({ children }: AppShellProps) => {
           </p>
           <div className="mt-2 text-2xl font-semibold">{APP_NAME}</div>
           <p className="mt-3 text-[13px] text-white/80">
-            毎日のコンディションを、ミルクティーのように柔らかく共有。
+            ミルクティーのようにまろやかにいきましょうぜ！！
           </p>
         </div>
         <nav className="space-y-1 text-sm font-medium text-[#7f6b5a]">

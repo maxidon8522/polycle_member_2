@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "gantt-task-react/dist/index.css";
 import { APP_NAME } from "@/config/constants";
 
 const geistSans = Geist({
@@ -16,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: APP_NAME,
   description:
-    "Polycle Member 2 - Unified daily report and task management portal.",
+    "Polycle Member - Unified daily report and task management portal.",
 };
 
 export default function RootLayout({
