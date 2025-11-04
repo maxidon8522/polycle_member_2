@@ -4,7 +4,6 @@ import { DEFAULT_TIMEZONE } from "@/config/constants";
 import { env } from "@/config/env";
 import { retryWithBackoff } from "@/lib/retry";
 import { getWeekStart, getWeekdayCode } from "@/lib/time";
-import { DEPARTMENT_OF_USER } from "@/config/departments";
 import { getSheetsClient } from "./google";
 
 const DAILY_REPORT_RESERVED_COLUMNS = 7; // O〜U
@@ -13,10 +12,6 @@ const safeString = (value: unknown): string =>
   value === undefined || value === null ? "" : String(value);
 
 const normalizeSlug = (slug: string) => slug.trim().toLowerCase();
-const compactSlug = (value: string) =>
-  normalizeSlug(value).replace(/[^a-z0-9]/g, "");
-
-const escapeSheetName = (name: string): string => name.replace(/'/g, "''");
 
 const extractErrorMessage = (error: unknown): string => {
   if (!error) return "";
@@ -40,90 +35,55 @@ const isRangeParseError = (message: string): boolean => {
   return message.includes("Unable to parse range");
 };
 
-const sheetTitleCache = new Map<string, Map<string, string>>();
-const sheetTitlePromiseCache = new Map<string, Promise<Map<string, string>>>();
+const DAILY_REPORT_SHEET_NAME = "daily_reports";
+const DAILY_REPORT_VALUE_RANGE = `'${DAILY_REPORT_SHEET_NAME}'!A:U`;
+const DAILY_REPORT_CACHE_TTL_MS = 15_000;
 
-const buildSheetTitleCacheKey = (spreadsheetId: string) => spreadsheetId;
+let dailyReportValuesCache: { timestamp: number; values: string[][] } | null =
+  null;
 
-const registerSheetTitle = (
-  registry: Map<string, string>,
-  title: string,
-) => {
-  const normalized = normalizeSlug(title);
-  if (!registry.has(normalized)) {
-    registry.set(normalized, title);
+const getCachedDailyReportValues = (): string[][] | null => {
+  if (!dailyReportValuesCache) {
+    return null;
   }
-
-  const condensed = compactSlug(title);
-  if (condensed && !registry.has(condensed)) {
-    registry.set(condensed, title);
+  const age = Date.now() - dailyReportValuesCache.timestamp;
+  if (age > DAILY_REPORT_CACHE_TTL_MS) {
+    dailyReportValuesCache = null;
+    return null;
   }
+  return dailyReportValuesCache.values;
 };
 
-const fetchSheetTitleMap = async (
-  sheets: Awaited<ReturnType<typeof getSheetsClient>>,
-  spreadsheetId: string,
-): Promise<Map<string, string>> => {
-  const cacheKey = buildSheetTitleCacheKey(spreadsheetId);
-  const cached = sheetTitleCache.get(cacheKey);
-  if (cached) {
-    return cached;
+const setCachedDailyReportValues = (values: string[][]) => {
+  dailyReportValuesCache = { timestamp: Date.now(), values };
+};
+
+const invalidateDailyReportCache = () => {
+  dailyReportValuesCache = null;
+};
+
+const humanizeSlug = (slug: string): string => {
+  const segments = slug
+    .split(/[-_]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (segments.length === 0) {
+    return slug;
   }
+  return segments
+    .map(
+      (part) => part.charAt(0).toUpperCase() + part.slice(1),
+    )
+    .join(" ");
+};
 
-  const existingPromise = sheetTitlePromiseCache.get(cacheKey);
-  if (existingPromise) {
-    return existingPromise;
-  }
-
-  const promise = (async () => {
-    const response = await retryWithBackoff(() =>
-      sheets.spreadsheets.get({
-        spreadsheetId,
-        fields: "sheets.properties.title",
-      }),
-    );
-
-    const registry = new Map<string, string>();
-    const sheetList = response.data.sheets ?? [];
-    for (const sheet of sheetList) {
-      const title = sheet.properties?.title;
-      if (!title) continue;
-      registerSheetTitle(registry, title);
+const pickFirstNonEmpty = (...values: (string | undefined)[]): string => {
+  for (const value of values) {
+    if (value && value.trim().length > 0) {
+      return value;
     }
-
-    sheetTitleCache.set(cacheKey, registry);
-    sheetTitlePromiseCache.delete(cacheKey);
-    return registry;
-  })();
-
-  sheetTitlePromiseCache.set(cacheKey, promise);
-  return promise;
-};
-
-const resolveSheetTitleForSlug = async (
-  sheets: Awaited<ReturnType<typeof getSheetsClient>>,
-  spreadsheetId: string,
-  userSlug: string,
-): Promise<string | null> => {
-  const registry = await fetchSheetTitleMap(sheets, spreadsheetId);
-  const normalized = normalizeSlug(userSlug);
-  const condensed = compactSlug(userSlug);
-
-  if (registry.has(normalized)) {
-    return registry.get(normalized) ?? null;
   }
-
-  if (condensed && registry.has(condensed)) {
-    return registry.get(condensed) ?? null;
-  }
-
-  return null;
-};
-
-const invalidateSheetTitleCache = (spreadsheetId: string) => {
-  const cacheKey = buildSheetTitleCacheKey(spreadsheetId);
-  sheetTitleCache.delete(cacheKey);
-  sheetTitlePromiseCache.delete(cacheKey);
+  return "";
 };
 
 const splitSheetValues = (values: string[][]) => {
@@ -166,7 +126,7 @@ const toDailyReportRow = (report: DailyReport): (string | number)[] => {
 
 const mapRowToDailyReport = (
   row: string[],
-  userSlug: string,
+  fallbackSlug = "",
 ): DailyReport | null => {
   const date = safeString(row[0]);
   if (!date) {
@@ -174,7 +134,11 @@ const mapRowToDailyReport = (
   }
 
   const slugCell = safeString(row[13]);
-  const slug = normalizeSlug(slugCell || userSlug);
+  const rawSlug = slugCell || fallbackSlug;
+  const slug = normalizeSlug(rawSlug);
+  if (!slug) {
+    return null;
+  }
 
   const tagsCell = safeString(row[8]);
   const tags = tagsCell
@@ -188,12 +152,22 @@ const mapRowToDailyReport = (
   const source: DailyReportSource =
     sourceCell === "slack_ingest" ? "slack_ingest" : "manual";
 
+  const displayNameCell = safeString(row[14]);
+  const resolvedUserName =
+    pickFirstNonEmpty(
+      displayNameCell,
+      slugCell,
+      fallbackSlug,
+      humanizeSlug(slug),
+      slug,
+    ) || slug;
+
   return {
     reportId: `dr_${slug}_${date}`,
     date,
     weekday: getWeekdayCode(date),
     userSlug: slug,
-    userName: slug,
+    userName: resolvedUserName,
     email: "",
     slackUserId: "",
     slackTeamId: "",
@@ -253,23 +227,20 @@ export interface DailyReportQueryOptions {
   tags?: string[];
 }
 
-export const readDailyReportSheet = async (
-  userSlug: string,
-): Promise<string[][]> => {
+const readDailyReportValues = async (): Promise<string[][]> => {
   const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
-  const resolvedSheetTitle =
-    (await resolveSheetTitleForSlug(sheets, spreadsheetId, userSlug)) ??
-    userSlug;
-  const sheetName = escapeSheetName(resolvedSheetTitle);
-  const range = `'${sheetName}'!A:N`;
+  const cached = getCachedDailyReportValues();
+  if (cached) {
+    return cached;
+  }
 
   try {
     const values = await retryWithBackoff<string[][] | null>(async (attempt) => {
       try {
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId,
-          range,
+          range: DAILY_REPORT_VALUE_RANGE,
           valueRenderOption: "UNFORMATTED_VALUE",
         });
         return response.data.values ?? [];
@@ -277,18 +248,17 @@ export const readDailyReportSheet = async (
         const errorMessage = extractErrorMessage(error);
         if (isRangeParseError(errorMessage)) {
           if (attempt === 0) {
-            console.warn("sheets.daily_reports.read_user.missing_sheet", {
+            console.warn("sheets.daily_reports.read.missing_sheet", {
               spreadsheetId,
-              sheetName: resolvedSheetTitle,
+              range: DAILY_REPORT_VALUE_RANGE,
             });
           }
-          invalidateSheetTitleCache(spreadsheetId);
           return null;
         }
-        console.error("sheets.daily_reports.read_user.error", {
+        console.error("sheets.daily_reports.read.error", {
           attempt,
           spreadsheetId,
-          sheetName: resolvedSheetTitle,
+          range: DAILY_REPORT_VALUE_RANGE,
           error: errorMessage,
         });
         throw error;
@@ -299,11 +269,12 @@ export const readDailyReportSheet = async (
       return [];
     }
 
+    setCachedDailyReportValues(values);
     return values;
   } catch (error) {
     const errorMessage = extractErrorMessage(error);
-    console.warn("sheets.daily_reports.read_user.failed", {
-      userSlug,
+    console.warn("sheets.daily_reports.read.failed", {
+      range: DAILY_REPORT_VALUE_RANGE,
       error: errorMessage,
     });
     return [];
@@ -311,11 +282,10 @@ export const readDailyReportSheet = async (
 };
 
 export const findRowIndexByDateAndSlug = async (
-  sheetName: string,
   dateISO: string,
   userSlug: string,
 ): Promise<number | null> => {
-  const values = await readDailyReportSheet(sheetName);
+  const values = await readDailyReportValues();
   const { rows } = splitSheetValues(values);
   const match = findDailyReportRowMatch(rows, dateISO, userSlug);
   return match ? match.sheetRowNumber : null;
@@ -325,7 +295,7 @@ export const getSlackTimestampForReport = async (
   userSlug: string,
   date: string,
 ): Promise<string | null> => {
-  const values = await readDailyReportSheet(userSlug);
+  const values = await readDailyReportValues();
   const { rows } = splitSheetValues(values);
   const match = findDailyReportRowMatch(rows, date, userSlug);
   if (!match) {
@@ -342,11 +312,7 @@ export const setSlackTsOnSheet = async (
 ): Promise<void> => {
   const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
-  const resolvedSheetTitle =
-    (await resolveSheetTitleForSlug(sheets, spreadsheetId, userSlug)) ??
-    userSlug;
-  const sheetName = escapeSheetName(resolvedSheetTitle);
-  const rowIndex = await findRowIndexByDateAndSlug(userSlug, date, userSlug);
+  const rowIndex = await findRowIndexByDateAndSlug(date, userSlug);
 
   if (!rowIndex) {
     console.warn("sheets.daily_reports.set_slack_ts.missing_row", {
@@ -356,7 +322,7 @@ export const setSlackTsOnSheet = async (
     return;
   }
 
-  const range = `'${sheetName}'!K${rowIndex}:K${rowIndex}`;
+  const range = `'${DAILY_REPORT_SHEET_NAME}'!K${rowIndex}:K${rowIndex}`;
 
   await retryWithBackoff(async (attempt) => {
     try {
@@ -366,6 +332,7 @@ export const setSlackTsOnSheet = async (
         valueInputOption: "RAW",
         requestBody: { values: [[slackTs]] },
       });
+      invalidateDailyReportCache();
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -387,12 +354,8 @@ export const upsertDailyReport = async (
 ): Promise<void> => {
   const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
-  const resolvedSheetTitle =
-    (await resolveSheetTitleForSlug(sheets, spreadsheetId, report.userSlug)) ??
-    report.userSlug;
-  const sheetName = escapeSheetName(resolvedSheetTitle);
 
-  const values = await readDailyReportSheet(report.userSlug);
+  const values = await readDailyReportValues();
   const { rows } = splitSheetValues(values);
   const match = findDailyReportRowMatch(rows, report.date, report.userSlug);
 
@@ -416,7 +379,7 @@ export const upsertDailyReport = async (
   const payload = [toDailyReportRow(normalized)];
 
   if (match) {
-    const range = `'${sheetName}'!A${match.sheetRowNumber}:U${match.sheetRowNumber}`;
+    const range = `'${DAILY_REPORT_SHEET_NAME}'!A${match.sheetRowNumber}:U${match.sheetRowNumber}`;
     await retryWithBackoff(async (attempt) => {
       try {
         await sheets.spreadsheets.values.update({
@@ -425,6 +388,7 @@ export const upsertDailyReport = async (
           valueInputOption: "RAW",
           requestBody: { values: payload },
         });
+        invalidateDailyReportCache();
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
@@ -441,7 +405,7 @@ export const upsertDailyReport = async (
     return;
   }
 
-  const range = `'${sheetName}'!A:U`;
+  const range = `'${DAILY_REPORT_SHEET_NAME}'!A:U`;
   await retryWithBackoff(async (attempt) => {
     try {
       await sheets.spreadsheets.values.append({
@@ -451,6 +415,7 @@ export const upsertDailyReport = async (
         insertDataOption: "INSERT_ROWS",
         requestBody: { values: payload },
       });
+      invalidateDailyReportCache();
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -514,21 +479,12 @@ export const fetchDailyReports = async (
     options.weekEnd ??
     formatISO(addDays(parseISO(weekStart), 6), { representation: "date" });
 
-  const targetSlugs = options.userSlug
-    ? [options.userSlug]
-    : Object.keys(DEPARTMENT_OF_USER);
+  const values = await readDailyReportValues();
+  const { rows } = splitSheetValues(values);
+  const reports = rows
+    .map((row) => mapRowToDailyReport(row))
+    .filter((report): report is DailyReport => report !== null);
 
-  const compiled = await Promise.all(
-    targetSlugs.map(async (slug) => {
-      const values = await readDailyReportSheet(slug);
-      const { rows } = splitSheetValues(values);
-      return rows
-        .map((row) => mapRowToDailyReport(row, slug))
-        .filter((report): report is DailyReport => report !== null);
-    }),
-  );
-
-  const reports = compiled.flat();
   const deduplicatedReports = Array.from(
     reports.reduce((accumulator, report) => {
       const key = report.reportId?.trim();
@@ -551,9 +507,7 @@ export const fetchDailyReports = async (
     .filter((report) => report.date >= weekStart && report.date <= weekEnd)
     .filter((report) => {
       if (options.userSlug) {
-        return (
-          normalizeSlug(report.userSlug) === normalizeSlug(options.userSlug)
-        );
+        return normalizeSlug(report.userSlug) === normalizeSlug(options.userSlug);
       }
       return true;
     })
