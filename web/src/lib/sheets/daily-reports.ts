@@ -13,6 +13,8 @@ const safeString = (value: unknown): string =>
   value === undefined || value === null ? "" : String(value);
 
 const normalizeSlug = (slug: string) => slug.trim().toLowerCase();
+const compactSlug = (value: string) =>
+  normalizeSlug(value).replace(/[^a-z0-9]/g, "");
 
 const escapeSheetName = (name: string): string => name.replace(/'/g, "''");
 
@@ -36,6 +38,92 @@ const extractErrorMessage = (error: unknown): string => {
 
 const isRangeParseError = (message: string): boolean => {
   return message.includes("Unable to parse range");
+};
+
+const sheetTitleCache = new Map<string, Map<string, string>>();
+const sheetTitlePromiseCache = new Map<string, Promise<Map<string, string>>>();
+
+const buildSheetTitleCacheKey = (spreadsheetId: string) => spreadsheetId;
+
+const registerSheetTitle = (
+  registry: Map<string, string>,
+  title: string,
+) => {
+  const normalized = normalizeSlug(title);
+  if (!registry.has(normalized)) {
+    registry.set(normalized, title);
+  }
+
+  const condensed = compactSlug(title);
+  if (condensed && !registry.has(condensed)) {
+    registry.set(condensed, title);
+  }
+};
+
+const fetchSheetTitleMap = async (
+  sheets: Awaited<ReturnType<typeof getSheetsClient>>,
+  spreadsheetId: string,
+): Promise<Map<string, string>> => {
+  const cacheKey = buildSheetTitleCacheKey(spreadsheetId);
+  const cached = sheetTitleCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const existingPromise = sheetTitlePromiseCache.get(cacheKey);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const promise = (async () => {
+    const response = await retryWithBackoff(() =>
+      sheets.spreadsheets.get({
+        spreadsheetId,
+        fields: "sheets.properties.title",
+      }),
+    );
+
+    const registry = new Map<string, string>();
+    const sheetList = response.data.sheets ?? [];
+    for (const sheet of sheetList) {
+      const title = sheet.properties?.title;
+      if (!title) continue;
+      registerSheetTitle(registry, title);
+    }
+
+    sheetTitleCache.set(cacheKey, registry);
+    sheetTitlePromiseCache.delete(cacheKey);
+    return registry;
+  })();
+
+  sheetTitlePromiseCache.set(cacheKey, promise);
+  return promise;
+};
+
+const resolveSheetTitleForSlug = async (
+  sheets: Awaited<ReturnType<typeof getSheetsClient>>,
+  spreadsheetId: string,
+  userSlug: string,
+): Promise<string | null> => {
+  const registry = await fetchSheetTitleMap(sheets, spreadsheetId);
+  const normalized = normalizeSlug(userSlug);
+  const condensed = compactSlug(userSlug);
+
+  if (registry.has(normalized)) {
+    return registry.get(normalized) ?? null;
+  }
+
+  if (condensed && registry.has(condensed)) {
+    return registry.get(condensed) ?? null;
+  }
+
+  return null;
+};
+
+const invalidateSheetTitleCache = (spreadsheetId: string) => {
+  const cacheKey = buildSheetTitleCacheKey(spreadsheetId);
+  sheetTitleCache.delete(cacheKey);
+  sheetTitlePromiseCache.delete(cacheKey);
 };
 
 const splitSheetValues = (values: string[][]) => {
@@ -170,14 +258,18 @@ export const readDailyReportSheet = async (
 ): Promise<string[][]> => {
   const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
-  const sheetName = escapeSheetName(userSlug);
+  const resolvedSheetTitle =
+    (await resolveSheetTitleForSlug(sheets, spreadsheetId, userSlug)) ??
+    userSlug;
+  const sheetName = escapeSheetName(resolvedSheetTitle);
+  const range = `'${sheetName}'!A:N`;
 
   try {
     const values = await retryWithBackoff<string[][] | null>(async (attempt) => {
       try {
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId,
-          range: `'${sheetName}'!A:N`,
+          range,
           valueRenderOption: "UNFORMATTED_VALUE",
         });
         return response.data.values ?? [];
@@ -187,15 +279,16 @@ export const readDailyReportSheet = async (
           if (attempt === 0) {
             console.warn("sheets.daily_reports.read_user.missing_sheet", {
               spreadsheetId,
-              sheetName: userSlug,
+              sheetName: resolvedSheetTitle,
             });
           }
+          invalidateSheetTitleCache(spreadsheetId);
           return null;
         }
         console.error("sheets.daily_reports.read_user.error", {
           attempt,
           spreadsheetId,
-          sheetName: userSlug,
+          sheetName: resolvedSheetTitle,
           error: errorMessage,
         });
         throw error;
@@ -249,7 +342,10 @@ export const setSlackTsOnSheet = async (
 ): Promise<void> => {
   const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
-  const sheetName = escapeSheetName(userSlug);
+  const resolvedSheetTitle =
+    (await resolveSheetTitleForSlug(sheets, spreadsheetId, userSlug)) ??
+    userSlug;
+  const sheetName = escapeSheetName(resolvedSheetTitle);
   const rowIndex = await findRowIndexByDateAndSlug(userSlug, date, userSlug);
 
   if (!rowIndex) {
@@ -291,7 +387,10 @@ export const upsertDailyReport = async (
 ): Promise<void> => {
   const spreadsheetId = env.server.SHEETS_DR_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
-  const sheetName = escapeSheetName(report.userSlug);
+  const resolvedSheetTitle =
+    (await resolveSheetTitleForSlug(sheets, spreadsheetId, report.userSlug)) ??
+    report.userSlug;
+  const sheetName = escapeSheetName(resolvedSheetTitle);
 
   const values = await readDailyReportSheet(report.userSlug);
   const { rows } = splitSheetValues(values);
