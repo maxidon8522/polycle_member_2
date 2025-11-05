@@ -20,6 +20,9 @@ const normalizeText = (value?: string | null): string =>
   typeof value === "string"
     ? value
         .normalize("NFKC")
+        .replace(/\u200B/g, "")
+        .replace(/\+/g, " ")
+        .replace(/\s+/g, " ")
         .trim()
         .toLowerCase()
     : "";
@@ -59,10 +62,16 @@ const TASK_STATUSES: TaskStatus[] = [
 const TASK_PRIORITIES: TaskPriority[] = ["高", "中", "低"];
 
 const getSingleParam = (value?: string | string[]): string | undefined => {
-  if (Array.isArray(value)) {
-    return value[0];
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (typeof raw !== "string") {
+    return undefined;
   }
-  return typeof value === "string" ? value : undefined;
+  const plusAsSpace = raw.replace(/\+/g, "%20");
+  try {
+    return decodeURIComponent(plusAsSpace);
+  } catch {
+    return plusAsSpace.replace(/%20/g, " ");
+  }
 };
 
 const isTaskStatus = (value?: string): value is TaskStatus => {
