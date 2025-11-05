@@ -67,7 +67,6 @@ const normalizeCell = (value?: string): string =>
         .replace(/\+/g, " ")
         .replace(/\s+/g, " ")
         .trim()
-        .toLowerCase()
     : "";
 
 const mapRowToTaskHistory = (
@@ -329,39 +328,43 @@ export const fetchTasks = async (): Promise<Task[]> => {
     historyByTaskId.set(key, sorted);
   }
 
-  return taskRows
-    .map((row) => {
-      const taskId = safeString(row[0]);
-      const history = historyByTaskId.get(taskId) ?? [];
-      const task = mapRowToTask(row, history);
-      if (!task) {
-        return null;
-      }
+  const normalizedTasks: Task[] = [];
 
-      const normalizeOptional = (value?: string) => {
-        const normalized = normalizeCell(value);
-        return normalized || undefined;
-      };
+  for (const row of taskRows) {
+    const taskId = safeString(row[0]);
+    const history = historyByTaskId.get(taskId) ?? [];
+    const task = mapRowToTask(row, history);
+    if (!task) {
+      continue;
+    }
 
-      return {
-        ...task,
-        taskId: normalizeCell(task.taskId),
-        title: normalizeCell(task.title),
-        assigneeName: normalizeCell(task.assigneeName),
-        projectName: normalizeCell(task.projectName),
-        status: normalizeCell(task.status) as Task["status"],
-        priority: normalizeCell(task.priority) as Task["priority"],
-        dueDate: normalizeOptional(task.dueDate),
-        startDate: normalizeOptional(task.startDate),
-        doneDate: normalizeOptional(task.doneDate),
-        detailUrl: task.detailUrl?.trim() || undefined,
-        notes: normalizeOptional(task.notes),
-        tags: (task.tags ?? []).map((tag) => normalizeCell(tag)).filter(Boolean),
-        createdAt: normalizeCell(task.createdAt) || new Date().toISOString(),
-        updatedAt: normalizeCell(task.updatedAt) || new Date().toISOString(),
-      } satisfies Task;
-    })
-    .filter((task): task is Task => task !== null);
+    const normalizeOptional = (value?: string) => {
+      const normalized = normalizeCell(value);
+      return normalized || undefined;
+    };
+
+    normalizedTasks.push({
+      ...task,
+      taskId: normalizeCell(task.taskId),
+      title: normalizeCell(task.title),
+      assigneeName: normalizeCell(task.assigneeName),
+      projectName: normalizeCell(task.projectName),
+      status: normalizeCell(task.status) as Task["status"],
+      priority: normalizeCell(task.priority) as Task["priority"],
+      dueDate: normalizeOptional(task.dueDate),
+      startDate: normalizeOptional(task.startDate),
+      doneDate: normalizeOptional(task.doneDate),
+      detailUrl: task.detailUrl?.trim() || undefined,
+      notes: normalizeOptional(task.notes),
+      tags: (task.tags ?? [])
+        .map((tag) => normalizeCell(tag))
+        .filter(Boolean),
+      createdAt: normalizeOptional(task.createdAt) ?? new Date().toISOString(),
+      updatedAt: normalizeOptional(task.updatedAt) ?? new Date().toISOString(),
+    });
+  }
+
+  return normalizedTasks;
 };
 
 export const upsertTask = async (task: Task): Promise<void> => {
