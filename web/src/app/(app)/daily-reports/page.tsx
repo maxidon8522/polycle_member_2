@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_noStore as noStore } from "next/cache";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { DailyReportsFilter } from "@/components/daily-reports/daily-reports-filter";
@@ -72,6 +73,8 @@ const matchesTags = (reportTags: string[], tagFilters: string[]) => {
 };
 
 export default async function DailyReportsPage({ searchParams }: PageProps) {
+  noStore();
+
   const userFilter =
     typeof searchParams?.user === "string" ? searchParams.user : undefined;
   const channelFilter =

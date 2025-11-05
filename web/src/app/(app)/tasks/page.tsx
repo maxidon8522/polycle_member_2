@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_noStore as noStore } from "next/cache";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { listTasks } from "@/server/repositories/tasks-repository";
@@ -90,7 +91,7 @@ const applyTaskFilters = (
   const categoryFilter = normalizeText(filters.category);
   const statusFilter = filters.status;
   const priorityFilter = filters.priority;
-  const dueBeforeValue = filters.dueBefore?.trim();
+  const dueBeforeValue = normalizeText(filters.dueBefore);
 
   return tasks.filter((task) => {
     if (assigneeFilter) {
@@ -121,7 +122,7 @@ const applyTaskFilters = (
     }
 
     if (dueBeforeValue) {
-      const dueDate = task.dueDate?.slice(0, 10) ?? "";
+      const dueDate = normalizeText(task.dueDate?.slice(0, 10) ?? task.dueDate);
       if (dueDate !== dueBeforeValue) {
         return false;
       }
@@ -132,6 +133,8 @@ const applyTaskFilters = (
 };
 
 export default async function TasksPage({ searchParams }: PageProps) {
+  noStore();
+
   const assigneeFilter = getSingleParam(searchParams?.assignee);
   const statusParam = getSingleParam(searchParams?.status);
   const statusFilter = isTaskStatus(statusParam) ? statusParam : undefined;
@@ -198,6 +201,30 @@ export default async function TasksPage({ searchParams }: PageProps) {
     `期限超過: ${overdueCount}`,
     `3日以内の期限: ${dueSoonCount}`,
   ];
+
+  const debugInfo =
+    process.env.NODE_ENV === "development" ? (
+      <pre className="whitespace-pre-wrap rounded-lg bg-[#fffaf5] p-3 text-xs text-[#7f6b5a]">
+        {JSON.stringify(
+          {
+            parsedFilters: {
+              assignee: assigneeFilter,
+              status: statusFilter ?? null,
+              priority: priorityFilter ?? null,
+              dueBefore: dueBeforeFilter ?? null,
+              category: categoryFilter || null,
+              project: projectFilter || null,
+            },
+            counts: {
+              total: totalCount,
+              filtered: filteredCount,
+            },
+          },
+          null,
+          2,
+        )}
+      </pre>
+    ) : null;
 
   return (
     <div className="space-y-6">
@@ -364,6 +391,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
       >
         <TasksGantt tasks={filteredTasks} />
       </Card>
+      {debugInfo}
     </div>
   );
 }
