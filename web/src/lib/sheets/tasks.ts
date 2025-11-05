@@ -59,6 +59,15 @@ const splitSheetValues = (values: string[][]) => {
   };
 };
 
+const sanitizeString = (value: unknown): string => {
+  return safeString(value)
+    .normalize("NFKC")
+    .replace(/\u200B/g, "")
+    .replace(/\+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
 const mapRowToTaskHistory = (
   row: string[],
   rowIndex: number,
@@ -211,29 +220,29 @@ const mapRowToTask = (
     return null;
   }
 
-  const tagsCell = safeString(row[11]);
+  const tagsCell = sanitizeString(row[11]);
   const tags = tagsCell
     ? tagsCell
         .split(/\s+/)
-        .map((tag) => tag.replace(/^#/, "").trim())
+        .map((tag) => sanitizeString(tag.replace(/^#/, "")))
         .filter(Boolean)
     : [];
 
   return {
-    taskId,
-    projectName: safeString(row[1]),
-    title: safeString(row[2]),
-    assigneeName: safeString(row[3]),
-    status: safeString(row[4]) as Task["status"],
-    dueDate: safeString(row[5]) || undefined,
-    startDate: safeString(row[6]) || undefined,
-    doneDate: safeString(row[7]) || undefined,
-    detailUrl: safeString(row[8]) || undefined,
-    notes: safeString(row[9]) || undefined,
-    priority: safeString(row[10]) as Task["priority"],
+    taskId: sanitizeString(taskId),
+    projectName: sanitizeString(row[1]),
+    title: sanitizeString(row[2]),
+    assigneeName: sanitizeString(row[3]),
+    status: sanitizeString(row[4]) as Task["status"],
+    dueDate: sanitizeString(row[5]) || undefined,
+    startDate: sanitizeString(row[6]) || undefined,
+    doneDate: sanitizeString(row[7]) || undefined,
+    detailUrl: safeString(row[8]).trim() || undefined,
+    notes: safeString(row[9]).trim() || undefined,
+    priority: sanitizeString(row[10]) as Task["priority"],
     tags,
-    createdAt: safeString(row[12]) || "",
-    updatedAt: safeString(row[13]) || "",
+    createdAt: sanitizeString(row[12]) || "",
+    updatedAt: sanitizeString(row[13]) || "",
     history,
   };
 };
