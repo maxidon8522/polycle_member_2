@@ -35,30 +35,40 @@ const humanizeSlug = (slug: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
-const normalize = (value: string) => value.trim().toLowerCase();
+const normalizeText = (value?: string | null) =>
+  typeof value === "string"
+    ? value
+        .normalize("NFKC")
+        .trim()
+        .toLowerCase()
+    : "";
 
 const matchesUser = (reportSlug: string, userFilter?: string) => {
   if (!userFilter) return true;
-  return normalize(reportSlug) === normalize(userFilter);
+  return normalizeText(reportSlug) === normalizeText(userFilter);
 };
 
 const matchesChannel = (channelId: string | undefined, filter?: string) => {
   if (!filter) return true;
-  return (channelId ?? "").trim() === filter.trim();
+  return normalizeText(channelId ?? "") === normalizeText(filter);
 };
 
 const matchesKeyword = (fields: string[], keyword?: string) => {
-  if (!keyword) return true;
-  const normalizedKeyword = normalize(keyword);
+  const normalizedKeyword = normalizeText(keyword);
   if (!normalizedKeyword) return true;
-  const haystack = fields.join(" ").toLowerCase();
+  const haystack = fields.map((field) => normalizeText(field)).join(" ");
   return haystack.includes(normalizedKeyword);
 };
 
 const matchesTags = (reportTags: string[], tagFilters: string[]) => {
   if (tagFilters.length === 0) return true;
-  const normalizedTags = reportTags.map((tag) => normalize(tag));
-  return tagFilters.every((tag) => normalizedTags.includes(normalize(tag)));
+  const normalizedTags = reportTags
+    .map((tag) => normalizeText(tag))
+    .filter(Boolean);
+  return tagFilters
+    .map((tag) => normalizeText(tag))
+    .filter(Boolean)
+    .every((tag) => normalizedTags.includes(tag));
 };
 
 export default async function DailyReportsPage({ searchParams }: PageProps) {
@@ -90,6 +100,10 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
     weekEnd,
   });
 
+  const normalizedTagFilters = tagsFilter
+    .map((tag) => normalizeText(tag))
+    .filter(Boolean);
+
   const filteredReports = reports.filter((report) =>
     matchesUser(report.userSlug, userFilter) &&
     matchesChannel(report.channelId, channelFilter) &&
@@ -106,7 +120,7 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
       ],
       trimmedKeyword,
     ) &&
-    matchesTags(report.tags, tagsFilter),
+    matchesTags(report.tags, normalizedTagFilters),
   );
 
   const fallbackUserPairs = Object.keys(DEPARTMENT_OF_USER).map((slug) => [
@@ -123,10 +137,9 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
   if (userFilter && !userPairs.has(userFilter)) {
     userPairs.set(userFilter, humanizeSlug(userFilter));
   }
-  const userOptions = Array.from(userPairs.entries()).map(([value, label]) => ({
-    value,
-    label,
-  }));
+  const userOptions = Array.from(userPairs.entries())
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, "ja"));
 
   const defaultChannelId = env.server.SLACK_DAILY_REPORT_CHANNEL_ID.trim();
   const channelPairs = new Map<string, string>();
@@ -141,13 +154,15 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
   if (channelFilter && !channelPairs.has(channelFilter)) {
     channelPairs.set(channelFilter, channelFilter);
   }
-  const channelOptions = Array.from(channelPairs.entries()).map(
-    ([value, label]) => ({ value, label }),
-  );
+  const channelOptions = Array.from(channelPairs.entries())
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, "ja"));
 
   const tagOptions = Array.from(
     new Set(reports.flatMap((report) => report.tags)),
-  ).filter(Boolean);
+  )
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "ja"));
 
   const filteredCount = filteredReports.length;
   const totalCount = reports.length;

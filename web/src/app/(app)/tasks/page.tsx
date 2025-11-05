@@ -16,7 +16,12 @@ const toTimestamp = (value?: string | null): number | null => {
 };
 
 const normalizeText = (value?: string | null): string =>
-  typeof value === "string" ? value.trim().toLowerCase() : "";
+  typeof value === "string"
+    ? value
+        .normalize("NFKC")
+        .trim()
+        .toLowerCase()
+    : "";
 
 const buildTaskSummary = (tasks: Task[]) => {
   const now = Date.now();
@@ -85,13 +90,11 @@ const applyTaskFilters = (
   const categoryFilter = normalizeText(filters.category);
   const statusFilter = filters.status;
   const priorityFilter = filters.priority;
-  const dueBeforeValue = toTimestamp(filters.dueBefore);
+  const dueBeforeValue = filters.dueBefore?.trim();
 
   return tasks.filter((task) => {
     if (assigneeFilter) {
-      const matchesAssignee =
-        normalizeText(task.assigneeName).includes(assigneeFilter);
-      if (!matchesAssignee) {
+      if (normalizeText(task.assigneeName) !== assigneeFilter) {
         return false;
       }
     }
@@ -105,10 +108,7 @@ const applyTaskFilters = (
     }
 
     if (projectFilter) {
-      const matchesProject = normalizeText(task.projectName).includes(
-        projectFilter,
-      );
-      if (!matchesProject) {
+      if (normalizeText(task.projectName) !== projectFilter) {
         return false;
       }
     }
@@ -120,9 +120,9 @@ const applyTaskFilters = (
       }
     }
 
-    if (dueBeforeValue !== null) {
-      const taskDue = toTimestamp(task.dueDate);
-      if (taskDue === null || taskDue > dueBeforeValue) {
+    if (dueBeforeValue) {
+      const dueDate = task.dueDate?.slice(0, 10) ?? "";
+      if (dueDate !== dueBeforeValue) {
         return false;
       }
     }
@@ -165,7 +165,9 @@ export default async function TasksPage({ searchParams }: PageProps) {
   if (assigneeFilter) {
     assigneeOptionSet.add(assigneeFilter);
   }
-  const assigneeOptions = Array.from(assigneeOptionSet);
+  const assigneeOptions = Array.from(assigneeOptionSet).sort((a, b) =>
+    a.localeCompare(b, "ja"),
+  );
 
   const projectOptionSet = new Set(
     allTasks.map((task) => task.projectName).filter(Boolean),
@@ -173,7 +175,9 @@ export default async function TasksPage({ searchParams }: PageProps) {
   if (projectFilter) {
     projectOptionSet.add(projectFilter);
   }
-  const projectOptions = Array.from(projectOptionSet);
+  const projectOptions = Array.from(projectOptionSet).sort((a, b) =>
+    a.localeCompare(b, "ja"),
+  );
 
   const categoryOptionSet = new Set(
     allTasks
@@ -183,7 +187,9 @@ export default async function TasksPage({ searchParams }: PageProps) {
   if (categoryFilter) {
     categoryOptionSet.add(categoryFilter);
   }
-  const categoryOptions = Array.from(categoryOptionSet);
+  const categoryOptions = Array.from(categoryOptionSet).sort((a, b) =>
+    a.localeCompare(b, "ja"),
+  );
 
   const footerTextParts = [
     filteredCount === totalCount
