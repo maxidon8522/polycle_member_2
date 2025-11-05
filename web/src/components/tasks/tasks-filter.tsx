@@ -139,6 +139,7 @@ export const TasksFilter = ({
         router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
           scroll: false,
         });
+        router.refresh();
       });
     },
     [pathname, router, searchParams],

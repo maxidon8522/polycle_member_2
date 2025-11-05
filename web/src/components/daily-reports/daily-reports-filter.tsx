@@ -109,6 +109,7 @@ export const DailyReportsFilter = ({
         router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
           scroll: false,
         });
+        router.refresh();
       });
     },
     [pathname, router, searchParams],
