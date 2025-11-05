@@ -39,7 +39,14 @@ const TASK_STATUSES: TaskStatus[] = [
 
 const TASK_PRIORITIES: TaskPriority[] = ["高", "中", "低"];
 
-const normalizeOption = (value: string) => value.trim();
+const normalizeSpaces = (value: string) =>
+  value
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .replace(/\u200B/g, "")
+    .trim();
+
+const toKey = (value: string) => normalizeSpaces(value).toLowerCase();
 
 export const TasksFilter = ({
   assignees,
@@ -52,36 +59,78 @@ export const TasksFilter = ({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  const sortedAssignees = useMemo(
-    () =>
-      [...new Set(assignees.map(normalizeOption).filter(Boolean))].sort(
-        (a, b) => a.localeCompare(b, "ja"),
-      ),
-    [assignees],
-  );
+  const sortedAssignees = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const raw of assignees) {
+      const normalized = normalizeSpaces(raw);
+      const key = toKey(raw);
+      if (!normalized || key === "assignee") {
+        continue;
+      }
+      if (!map.has(key)) {
+        map.set(key, normalized);
+      }
+    }
+    if (selected.assignee) {
+      const normalizedSelected = normalizeSpaces(selected.assignee);
+      const selectedKey = toKey(selected.assignee);
+      if (normalizedSelected && !map.has(selectedKey)) {
+        map.set(selectedKey, normalizedSelected);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "ja"));
+  }, [assignees, selected.assignee]);
 
-  const sortedProjects = useMemo(
-    () =>
-      [...new Set(projects.map(normalizeOption).filter(Boolean))].sort(
-        (a, b) => a.localeCompare(b, "ja"),
-      ),
-    [projects],
-  );
+  const sortedProjects = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const raw of projects) {
+      const normalized = normalizeSpaces(raw);
+      const key = toKey(raw);
+      if (!normalized || key === "project" || key === "projects") {
+        continue;
+      }
+      if (!map.has(key)) {
+        map.set(key, normalized);
+      }
+    }
+    if (selected.project) {
+      const normalizedSelected = normalizeSpaces(selected.project);
+      const selectedKey = toKey(selected.project);
+      if (normalizedSelected && !map.has(selectedKey)) {
+        map.set(selectedKey, normalizedSelected);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "ja"));
+  }, [projects, selected.project]);
 
-  const sortedCategories = useMemo(
-    () =>
-      [...new Set(categories.map(normalizeOption).filter(Boolean))].sort(
-        (a, b) => a.localeCompare(b, "ja"),
-      ),
-    [categories],
-  );
+  const sortedCategories = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const raw of categories) {
+      const normalized = normalizeSpaces(raw);
+      const key = toKey(raw);
+      if (!normalized || key === "category" || key === "categories") {
+        continue;
+      }
+      if (!map.has(key)) {
+        map.set(key, normalized);
+      }
+    }
+    if (selected.category) {
+      const normalizedSelected = normalizeSpaces(selected.category);
+      const selectedKey = toKey(selected.category);
+      if (normalizedSelected && !map.has(selectedKey)) {
+        map.set(selectedKey, normalizedSelected);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "ja"));
+  }, [categories, selected.category]);
 
   const updateQuery = useCallback(
     (patch: FilterPatch) => {
       const params = new URLSearchParams(searchParams.toString());
 
       if ("assignee" in patch) {
-        const value = patch.assignee;
+        const value = normalizeSpaces(patch.assignee ?? "");
         if (value) {
           params.set("assignee", value);
         } else {
@@ -99,7 +148,7 @@ export const TasksFilter = ({
       }
 
       if ("dueBefore" in patch) {
-        const value = patch.dueBefore;
+        const value = normalizeSpaces(patch.dueBefore ?? "");
         if (value) {
           params.set("dueBefore", value);
         } else {
@@ -117,7 +166,7 @@ export const TasksFilter = ({
       }
 
       if ("category" in patch) {
-        const value = patch.category;
+        const value = normalizeSpaces(patch.category ?? "");
         if (value) {
           params.set("category", value);
         } else {
@@ -126,7 +175,7 @@ export const TasksFilter = ({
       }
 
       if ("project" in patch) {
-        const value = patch.project;
+        const value = normalizeSpaces(patch.project ?? "");
         if (value) {
           params.set("project", value);
         } else {
