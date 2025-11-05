@@ -67,6 +67,7 @@ const DAILY_REPORT_COLUMNS = [
   "todoTomorrow",
   "wishTomorrow",
   "personalNews",
+  "channelId",
   "tags",
   "source",
   "slackTs",
@@ -288,6 +289,7 @@ const mapRowToDailyReport = (
 
   const tagsCell = getCell(row, headerIndex, "tags");
   const sourceCell = getCell(row, headerIndex, "source");
+  const channelIdCell = getCell(row, headerIndex, "channelId");
 
   const resolvedUserName =
     getCell(row, headerIndex, "userName") ||
@@ -311,7 +313,7 @@ const mapRowToDailyReport = (
     email: "",
     slackUserId: "",
     slackTeamId: "",
-    channelId: "",
+    channelId: channelIdCell || "",
     satisfactionToday: getCell(row, headerIndex, "satisfactionToday"),
     doneToday: getCell(row, headerIndex, "doneToday"),
     goodMoreBackground: getCell(row, headerIndex, "goodMoreBackground"),
@@ -396,6 +398,7 @@ const buildDailyReportRow = (
   assign("todoTomorrow", report.todoTomorrow ?? "");
   assign("wishTomorrow", report.wishTomorrow ?? "");
   assign("personalNews", report.personalNews ?? "");
+  assign("channelId", report.channelId ?? "");
   assign("tags", joinTags(report.tags));
   assign("source", report.source ?? "manual");
   assign("slackTs", report.slackTs ?? "");

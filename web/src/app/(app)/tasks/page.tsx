@@ -15,6 +15,9 @@ const toTimestamp = (value?: string | null): number | null => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const normalizeText = (value?: string | null): string =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
 const buildTaskSummary = (tasks: Task[]) => {
   const now = Date.now();
 
@@ -66,6 +69,68 @@ const isTaskPriority = (value?: string): value is TaskPriority => {
   return TASK_PRIORITIES.includes(value as TaskPriority);
 };
 
+const applyTaskFilters = (
+  tasks: Task[],
+  filters: {
+    assignee?: string;
+    status?: TaskStatus;
+    priority?: TaskPriority;
+    projectName?: string;
+    dueBefore?: string;
+    category?: string;
+  },
+) => {
+  const assigneeFilter = normalizeText(filters.assignee);
+  const projectFilter = normalizeText(filters.projectName);
+  const categoryFilter = normalizeText(filters.category);
+  const statusFilter = filters.status;
+  const priorityFilter = filters.priority;
+  const dueBeforeValue = toTimestamp(filters.dueBefore);
+
+  return tasks.filter((task) => {
+    if (assigneeFilter) {
+      const matchesAssignee =
+        normalizeText(task.assigneeName).includes(assigneeFilter);
+      if (!matchesAssignee) {
+        return false;
+      }
+    }
+
+    if (statusFilter && task.status !== statusFilter) {
+      return false;
+    }
+
+    if (priorityFilter && task.priority !== priorityFilter) {
+      return false;
+    }
+
+    if (projectFilter) {
+      const matchesProject = normalizeText(task.projectName).includes(
+        projectFilter,
+      );
+      if (!matchesProject) {
+        return false;
+      }
+    }
+
+    if (categoryFilter) {
+      const tags = task.tags?.map((tag) => normalizeText(tag)) ?? [];
+      if (!tags.includes(categoryFilter)) {
+        return false;
+      }
+    }
+
+    if (dueBeforeValue !== null) {
+      const taskDue = toTimestamp(task.dueDate);
+      if (taskDue === null || taskDue > dueBeforeValue) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+};
+
 export default async function TasksPage({ searchParams }: PageProps) {
   const assigneeFilter = getSingleParam(searchParams?.assignee);
   const statusParam = getSingleParam(searchParams?.status);
@@ -78,36 +143,47 @@ export default async function TasksPage({ searchParams }: PageProps) {
   const categoryFilter = getSingleParam(searchParams?.category);
   const projectFilter = getSingleParam(searchParams?.project);
 
-  const [allTasks, filteredTasks] = await Promise.all([
-    listTasks(),
-    listTasks({
-      assignee: assigneeFilter,
-      status: statusFilter,
-      priority: priorityFilter,
-      projectName: projectFilter,
-      dueBefore: dueBeforeFilter,
-      category: categoryFilter,
-    }),
-  ]);
+  const allTasks = await listTasks();
+
+  const filteredTasks = applyTaskFilters(allTasks, {
+    assignee: assigneeFilter,
+    status: statusFilter,
+    priority: priorityFilter,
+    projectName: projectFilter,
+    dueBefore: dueBeforeFilter,
+    category: categoryFilter,
+  });
 
   const { now, overdueCount, dueSoonCount } = buildTaskSummary(filteredTasks);
 
   const totalCount = allTasks.length;
   const filteredCount = filteredTasks.length;
 
-  const assigneeOptions = Array.from(
-    new Set(allTasks.map((task) => task.assigneeName).filter(Boolean)),
+  const assigneeOptionSet = new Set(
+    allTasks.map((task) => task.assigneeName).filter(Boolean),
   );
-  const projectOptions = Array.from(
-    new Set(allTasks.map((task) => task.projectName).filter(Boolean)),
+  if (assigneeFilter) {
+    assigneeOptionSet.add(assigneeFilter);
+  }
+  const assigneeOptions = Array.from(assigneeOptionSet);
+
+  const projectOptionSet = new Set(
+    allTasks.map((task) => task.projectName).filter(Boolean),
   );
-  const categoryOptions = Array.from(
-    new Set(
-      allTasks
-        .flatMap((task) => task.tags ?? [])
-        .filter(Boolean),
-    ),
+  if (projectFilter) {
+    projectOptionSet.add(projectFilter);
+  }
+  const projectOptions = Array.from(projectOptionSet);
+
+  const categoryOptionSet = new Set(
+    allTasks
+      .flatMap((task) => task.tags ?? [])
+      .filter(Boolean),
   );
+  if (categoryFilter) {
+    categoryOptionSet.add(categoryFilter);
+  }
+  const categoryOptions = Array.from(categoryOptionSet);
 
   const footerTextParts = [
     filteredCount === totalCount
@@ -285,4 +361,3 @@ export default async function TasksPage({ searchParams }: PageProps) {
     </div>
   );
 }
-

@@ -35,6 +35,32 @@ const humanizeSlug = (slug: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
+const normalize = (value: string) => value.trim().toLowerCase();
+
+const matchesUser = (reportSlug: string, userFilter?: string) => {
+  if (!userFilter) return true;
+  return normalize(reportSlug) === normalize(userFilter);
+};
+
+const matchesChannel = (channelId: string | undefined, filter?: string) => {
+  if (!filter) return true;
+  return (channelId ?? "").trim() === filter.trim();
+};
+
+const matchesKeyword = (fields: string[], keyword?: string) => {
+  if (!keyword) return true;
+  const normalizedKeyword = normalize(keyword);
+  if (!normalizedKeyword) return true;
+  const haystack = fields.join(" ").toLowerCase();
+  return haystack.includes(normalizedKeyword);
+};
+
+const matchesTags = (reportTags: string[], tagFilters: string[]) => {
+  if (tagFilters.length === 0) return true;
+  const normalizedTags = reportTags.map((tag) => normalize(tag));
+  return tagFilters.every((tag) => normalizedTags.includes(normalize(tag)));
+};
+
 export default async function DailyReportsPage({ searchParams }: PageProps) {
   const userFilter =
     typeof searchParams?.user === "string" ? searchParams.user : undefined;
@@ -59,27 +85,36 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
       ? keywordFilter.trim()
       : undefined;
 
-  const [allReports, filteredReports] = await Promise.all([
-    listDailyReports({
-      weekStart,
-      weekEnd,
-    }),
-    listDailyReports({
-      weekStart,
-      weekEnd,
-      ...(userFilter ? { userSlug: userFilter } : {}),
-      ...(trimmedKeyword ? { searchTerm: trimmedKeyword } : {}),
-      ...(tagsFilter.length > 0 ? { tags: tagsFilter } : {}),
-      ...(channelFilter ? { channelId: channelFilter } : {}),
-    }),
-  ]);
+  const reports = await listDailyReports({
+    weekStart,
+    weekEnd,
+  });
+
+  const filteredReports = reports.filter((report) =>
+    matchesUser(report.userSlug, userFilter) &&
+    matchesChannel(report.channelId, channelFilter) &&
+    matchesKeyword(
+      [
+        report.satisfactionToday,
+        report.doneToday,
+        report.goodMoreBackground,
+        report.moreNext,
+        report.todoTomorrow,
+        report.wishTomorrow,
+        report.personalNews,
+        report.tags.join(" "),
+      ],
+      trimmedKeyword,
+    ) &&
+    matchesTags(report.tags, tagsFilter),
+  );
 
   const fallbackUserPairs = Object.keys(DEPARTMENT_OF_USER).map((slug) => [
     slug,
     humanizeSlug(slug),
   ] as const);
   const userPairs = new Map<string, string>(fallbackUserPairs);
-  for (const report of allReports) {
+  for (const report of reports) {
     userPairs.set(
       report.userSlug,
       report.userName || humanizeSlug(report.userSlug),
@@ -98,7 +133,7 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
   if (defaultChannelId) {
     channelPairs.set(defaultChannelId, defaultChannelId);
   }
-  for (const report of allReports) {
+  for (const report of reports) {
     if (report.channelId) {
       channelPairs.set(report.channelId, report.channelId);
     }
@@ -111,11 +146,11 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
   );
 
   const tagOptions = Array.from(
-    new Set(allReports.flatMap((report) => report.tags)),
+    new Set(reports.flatMap((report) => report.tags)),
   ).filter(Boolean);
 
   const filteredCount = filteredReports.length;
-  const totalCount = allReports.length;
+  const totalCount = reports.length;
   const footerText =
     filteredCount === totalCount
       ? `取得件数: ${filteredCount}`
