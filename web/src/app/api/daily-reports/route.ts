@@ -11,6 +11,12 @@ export async function GET(request: Request) {
   const weekEnd = searchParams.get("weekEnd") ?? undefined;
   const userSlug = searchParams.get("user") ?? undefined;
   const tags = searchParams.get("tags")?.split(",").filter(Boolean);
+  const channelId = searchParams.get("channel") ?? undefined;
+  const searchTermRaw = searchParams.get("q") ?? undefined;
+  const searchTerm =
+    searchTermRaw && searchTermRaw.trim().length > 0
+      ? searchTermRaw.trim()
+      : undefined;
 
   
   const reports = await listDailyReports({
@@ -18,6 +24,8 @@ export async function GET(request: Request) {
     weekEnd,
     userSlug,
     tags,
+    channelId,
+    searchTerm,
   });
 
   return NextResponse.json({ data: reports });

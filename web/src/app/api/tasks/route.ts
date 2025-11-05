@@ -16,6 +16,7 @@ export async function GET(request: Request) {
   const dueBefore = searchParams.get("dueBefore") ?? undefined;
   const projectName = searchParams.get("project") ?? undefined;
   const searchTerm = searchParams.get("q") ?? undefined;
+  const category = searchParams.get("category") ?? undefined;
 
   const tasks = await listTasks({
     assignee: assignee ?? undefined,
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
     dueBefore,
     projectName,
     searchTerm,
+    category,
   });
 
   return NextResponse.json({ data: tasks });

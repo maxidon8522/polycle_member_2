@@ -15,106 +15,6 @@ const toTimestamp = (value?: string | null): number | null => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const normalizeText = (value?: string | null): string =>
-  typeof value === "string" ? value.trim().toLowerCase() : "";
-
-const PRIORITY_WEIGHT: Record<Task["priority"], number> = {
-  高: 0,
-  中: 1,
-  低: 2,
-};
-
-const compareDueDate = (left?: string, right?: string): number => {
-  const leftValue = toTimestamp(left);
-  const rightValue = toTimestamp(right);
-  if (leftValue === null && rightValue === null) return 0;
-  if (leftValue === null) return 1;
-  if (rightValue === null) return -1;
-  return leftValue - rightValue;
-};
-
-const applyTaskFilters = (
-  tasks: Task[],
-  filters: {
-    assignee?: string;
-    status?: TaskStatus;
-    priority?: TaskPriority;
-    projectName?: string;
-    dueBefore?: string;
-    category?: string;
-  },
-): Task[] => {
-  const assigneeFilter = normalizeText(filters.assignee);
-  const projectFilter = normalizeText(filters.projectName);
-  const dueBeforeValue = toTimestamp(filters.dueBefore);
-  const categoryFilter = normalizeText(filters.category);
-
-  return tasks
-    .filter((task) => {
-      if (assigneeFilter) {
-        const matchesAssignee = normalizeText(task.assigneeName).includes(
-          assigneeFilter,
-        );
-        if (!matchesAssignee) {
-          return false;
-        }
-      }
-
-      if (filters.status && task.status !== filters.status) {
-        return false;
-      }
-
-      if (filters.priority && task.priority !== filters.priority) {
-        return false;
-      }
-
-      if (projectFilter) {
-        const matchesProject = normalizeText(task.projectName).includes(
-          projectFilter,
-        );
-        if (!matchesProject) {
-          return false;
-        }
-      }
-
-      if (dueBeforeValue !== null) {
-        const taskDue = toTimestamp(task.dueDate);
-        if (taskDue === null || taskDue > dueBeforeValue) {
-          return false;
-        }
-      }
-
-      if (categoryFilter) {
-        const tags = task.tags?.map((tag) => normalizeText(tag)) ?? [];
-        if (!tags.includes(categoryFilter)) {
-          return false;
-        }
-      }
-
-      return true;
-    })
-    .sort((a, b) => {
-      const dueCompare = compareDueDate(a.dueDate, b.dueDate);
-      if (dueCompare !== 0) {
-        return dueCompare;
-      }
-
-      const priorityCompare =
-        PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
-      if (priorityCompare !== 0) {
-        return priorityCompare;
-      }
-
-      const updatedDiff =
-        (toTimestamp(b.updatedAt) ?? 0) - (toTimestamp(a.updatedAt) ?? 0);
-      if (updatedDiff !== 0) {
-        return updatedDiff;
-      }
-
-      return a.taskId.localeCompare(b.taskId);
-    });
-};
-
 const buildTaskSummary = (tasks: Task[]) => {
   const now = Date.now();
 
@@ -178,29 +78,36 @@ export default async function TasksPage({ searchParams }: PageProps) {
   const categoryFilter = getSingleParam(searchParams?.category);
   const projectFilter = getSingleParam(searchParams?.project);
 
-  const allTasks = await listTasks();
-
-  const filteredTasks = applyTaskFilters(allTasks, {
-    assignee: assigneeFilter,
-    status: statusFilter,
-    priority: priorityFilter,
-    projectName: projectFilter,
-    dueBefore: dueBeforeFilter,
-    category: categoryFilter,
-  });
+  const [allTasks, filteredTasks] = await Promise.all([
+    listTasks(),
+    listTasks({
+      assignee: assigneeFilter,
+      status: statusFilter,
+      priority: priorityFilter,
+      projectName: projectFilter,
+      dueBefore: dueBeforeFilter,
+      category: categoryFilter,
+    }),
+  ]);
 
   const { now, overdueCount, dueSoonCount } = buildTaskSummary(filteredTasks);
 
   const totalCount = allTasks.length;
   const filteredCount = filteredTasks.length;
 
-  const assigneeOptions = allTasks
-    .map((task) => task.assigneeName)
-    .filter(Boolean);
-  const projectOptions = allTasks
-    .map((task) => task.projectName)
-    .filter(Boolean);
-  const categoryOptions = allTasks.flatMap((task) => task.tags ?? []);
+  const assigneeOptions = Array.from(
+    new Set(allTasks.map((task) => task.assigneeName).filter(Boolean)),
+  );
+  const projectOptions = Array.from(
+    new Set(allTasks.map((task) => task.projectName).filter(Boolean)),
+  );
+  const categoryOptions = Array.from(
+    new Set(
+      allTasks
+        .flatMap((task) => task.tags ?? [])
+        .filter(Boolean),
+    ),
+  );
 
   const footerTextParts = [
     filteredCount === totalCount

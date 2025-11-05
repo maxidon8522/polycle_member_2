@@ -18,6 +18,7 @@ export interface TaskListFilters {
   dueBefore?: string;
   projectName?: string;
   searchTerm?: string;
+  category?: string;
 }
 
 export type TaskHistoryEventInput = {
@@ -86,6 +87,7 @@ export const listTasks = async (
   const statusFilter = filters.status;
   const priorityFilter = filters.priority;
   const searchTerm = normalize(filters.searchTerm);
+  const categoryFilter = normalize(filters.category);
 
   const filtered = tasks.filter((task) => {
     if (assigneeFilter) {
@@ -106,6 +108,15 @@ export const listTasks = async (
 
     if (projectFilter && !normalize(task.projectName).includes(projectFilter)) {
       return false;
+    }
+
+    if (categoryFilter) {
+      const tagMatches = (task.tags ?? [])
+        .map((tag) => normalize(tag))
+        .includes(categoryFilter);
+      if (!tagMatches) {
+        return false;
+      }
     }
 
     if (dueBeforeValue !== null) {

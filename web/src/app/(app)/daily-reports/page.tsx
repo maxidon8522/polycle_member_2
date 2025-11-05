@@ -5,7 +5,6 @@ import { DailyReportsFilter } from "@/components/daily-reports/daily-reports-fil
 import { listDailyReports } from "@/server/repositories/daily-reports-repository";
 import { env } from "@/config/env";
 import { DEPARTMENT_OF_USER } from "@/config/departments";
-import type { DailyReport } from "@/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -13,8 +12,6 @@ export const revalidate = 0;
 type PageProps = {
   searchParams?: Record<string, string | string[] | undefined>;
 };
-
-const normalize = (value: string) => value.trim().toLowerCase();
 
 const parseTagsParam = (
   value: string | string[] | undefined,
@@ -30,41 +27,6 @@ const parseTagsParam = (
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-};
-
-const matchesKeyword = (report: DailyReport, keyword?: string) => {
-  if (!keyword) return true;
-  const normalizedKeyword = normalize(keyword);
-  if (!normalizedKeyword) return true;
-  const haystack = [
-    report.satisfactionToday,
-    report.doneToday,
-    report.goodMoreBackground,
-    report.moreNext,
-    report.todoTomorrow,
-    report.wishTomorrow,
-    report.personalNews,
-    report.tags.join(" "),
-  ]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(normalizedKeyword);
-};
-
-const matchesTags = (report: DailyReport, tags: string[]) => {
-  if (tags.length === 0) return true;
-  const reportTags = report.tags.map((tag) => normalize(tag));
-  return tags.every((tag) => reportTags.includes(normalize(tag)));
-};
-
-const matchesChannel = (report: DailyReport, channel?: string) => {
-  if (!channel) return true;
-  return report.channelId === channel;
-};
-
-const matchesUser = (report: DailyReport, userSlug?: string) => {
-  if (!userSlug) return true;
-  return normalize(report.userSlug) === normalize(userSlug);
 };
 
 const humanizeSlug = (slug: string) =>
@@ -92,21 +54,39 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
       ? searchParams.weekEnd
       : undefined;
 
-  const reports = await listDailyReports({
-    weekStart,
-    weekEnd,
-  });
+  const trimmedKeyword =
+    keywordFilter && keywordFilter.trim().length > 0
+      ? keywordFilter.trim()
+      : undefined;
+
+  const [allReports, filteredReports] = await Promise.all([
+    listDailyReports({
+      weekStart,
+      weekEnd,
+    }),
+    listDailyReports({
+      weekStart,
+      weekEnd,
+      ...(userFilter ? { userSlug: userFilter } : {}),
+      ...(trimmedKeyword ? { searchTerm: trimmedKeyword } : {}),
+      ...(tagsFilter.length > 0 ? { tags: tagsFilter } : {}),
+      ...(channelFilter ? { channelId: channelFilter } : {}),
+    }),
+  ]);
 
   const fallbackUserPairs = Object.keys(DEPARTMENT_OF_USER).map((slug) => [
     slug,
     humanizeSlug(slug),
   ] as const);
   const userPairs = new Map<string, string>(fallbackUserPairs);
-  for (const report of reports) {
+  for (const report of allReports) {
     userPairs.set(
       report.userSlug,
       report.userName || humanizeSlug(report.userSlug),
     );
+  }
+  if (userFilter && !userPairs.has(userFilter)) {
+    userPairs.set(userFilter, humanizeSlug(userFilter));
   }
   const userOptions = Array.from(userPairs.entries()).map(([value, label]) => ({
     value,
@@ -118,29 +98,24 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
   if (defaultChannelId) {
     channelPairs.set(defaultChannelId, defaultChannelId);
   }
-  for (const report of reports) {
-    if (report.channelId && !channelPairs.has(report.channelId)) {
+  for (const report of allReports) {
+    if (report.channelId) {
       channelPairs.set(report.channelId, report.channelId);
     }
+  }
+  if (channelFilter && !channelPairs.has(channelFilter)) {
+    channelPairs.set(channelFilter, channelFilter);
   }
   const channelOptions = Array.from(channelPairs.entries()).map(
     ([value, label]) => ({ value, label }),
   );
 
   const tagOptions = Array.from(
-    new Set(reports.flatMap((report) => report.tags)),
+    new Set(allReports.flatMap((report) => report.tags)),
   ).filter(Boolean);
 
-  const filteredReports = reports.filter(
-    (report) =>
-      matchesUser(report, userFilter) &&
-      matchesChannel(report, channelFilter) &&
-      matchesKeyword(report, keywordFilter) &&
-      matchesTags(report, tagsFilter),
-  );
-
   const filteredCount = filteredReports.length;
-  const totalCount = reports.length;
+  const totalCount = allReports.length;
   const footerText =
     filteredCount === totalCount
       ? `取得件数: ${filteredCount}`

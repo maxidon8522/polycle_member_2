@@ -428,6 +428,7 @@ export interface DailyReportQueryOptions {
   weekEnd?: string;
   searchTerm?: string;
   tags?: string[];
+  channelId?: string;
 }
 
 export const findRowIndexByDateAndSlug = async (
@@ -709,5 +710,9 @@ export const fetchDailyReports = async (
       return options.tags.every((tag) =>
         normalizedTags.includes(tag.toLowerCase()),
       );
+    })
+    .filter((report) => {
+      if (!options.channelId) return true;
+      return (report.channelId ?? "").trim() === options.channelId.trim();
     });
 };
