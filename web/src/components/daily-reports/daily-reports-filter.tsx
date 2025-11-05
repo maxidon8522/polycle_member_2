@@ -161,7 +161,7 @@ export const DailyReportsFilter = ({
             onChange={(event) =>
               updateQuery({ user: event.target.value || null })
             }
-            disabled={isPending || sortedUsers.length === 0}
+            disabled={isPending}
           >
             <option value="">すべて</option>
             {sortedUsers.map((user) => (
@@ -180,7 +180,7 @@ export const DailyReportsFilter = ({
             onChange={(event) =>
               updateQuery({ channel: event.target.value || null })
             }
-            disabled={isPending || sortedChannels.length === 0}
+            disabled={isPending}
           >
             <option value="">すべて</option>
             {sortedChannels.map((channel) => (

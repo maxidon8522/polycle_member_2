@@ -178,7 +178,7 @@ export const TasksFilter = ({
             onChange={(event) =>
               updateQuery({ assignee: event.target.value || null })
             }
-            disabled={isPending || sortedAssignees.length === 0}
+            disabled={isPending}
           >
             <option value="">すべて</option>
             {sortedAssignees.map((assignee) => (
@@ -267,7 +267,7 @@ export const TasksFilter = ({
             onChange={(event) =>
               updateQuery({ category: event.target.value || null })
             }
-            disabled={isPending || sortedCategories.length === 0}
+            disabled={isPending}
           >
             <option value="">すべて</option>
             {sortedCategories.map((category) => (
@@ -286,7 +286,7 @@ export const TasksFilter = ({
             onChange={(event) =>
               updateQuery({ project: event.target.value || null })
             }
-            disabled={isPending || sortedProjects.length === 0}
+            disabled={isPending}
           >
             <option value="">すべて</option>
             {sortedProjects.map((project) => (
@@ -300,4 +300,3 @@ export const TasksFilter = ({
     </div>
   );
 };
-

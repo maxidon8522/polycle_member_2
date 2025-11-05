@@ -3,6 +3,8 @@ import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { DailyReportsFilter } from "@/components/daily-reports/daily-reports-filter";
 import { listDailyReports } from "@/server/repositories/daily-reports-repository";
+import { env } from "@/config/env";
+import { DEPARTMENT_OF_USER } from "@/config/departments";
 import type { DailyReport } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +67,12 @@ const matchesUser = (report: DailyReport, userSlug?: string) => {
   return normalize(report.userSlug) === normalize(userSlug);
 };
 
+const humanizeSlug = (slug: string) =>
+  slug
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
 export default async function DailyReportsPage({ searchParams }: PageProps) {
   const userFilter =
     typeof searchParams?.user === "string" ? searchParams.user : undefined;
@@ -89,23 +97,35 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
     weekEnd,
   });
 
-  const userOptions = Array.from(
-    reports.reduce((accumulator, report) => {
-      if (!accumulator.has(report.userSlug)) {
-        accumulator.set(report.userSlug, report.userName);
-      }
-      return accumulator;
-    }, new Map<string, string>()),
-  ).map(([value, label]) => ({ value, label }));
+  const fallbackUserPairs = Object.keys(DEPARTMENT_OF_USER).map((slug) => [
+    slug,
+    humanizeSlug(slug),
+  ] as const);
+  const userPairs = new Map<string, string>(fallbackUserPairs);
+  for (const report of reports) {
+    userPairs.set(
+      report.userSlug,
+      report.userName || humanizeSlug(report.userSlug),
+    );
+  }
+  const userOptions = Array.from(userPairs.entries()).map(([value, label]) => ({
+    value,
+    label,
+  }));
 
-  const channelOptions = Array.from(
-    reports.reduce((accumulator, report) => {
-      if (report.channelId && !accumulator.has(report.channelId)) {
-        accumulator.set(report.channelId, report.channelId);
-      }
-      return accumulator;
-    }, new Map<string, string>()),
-  ).map(([value, label]) => ({ value, label }));
+  const defaultChannelId = env.server.SLACK_DAILY_REPORT_CHANNEL_ID.trim();
+  const channelPairs = new Map<string, string>();
+  if (defaultChannelId) {
+    channelPairs.set(defaultChannelId, defaultChannelId);
+  }
+  for (const report of reports) {
+    if (report.channelId && !channelPairs.has(report.channelId)) {
+      channelPairs.set(report.channelId, report.channelId);
+    }
+  }
+  const channelOptions = Array.from(channelPairs.entries()).map(
+    ([value, label]) => ({ value, label }),
+  );
 
   const tagOptions = Array.from(
     new Set(reports.flatMap((report) => report.tags)),
