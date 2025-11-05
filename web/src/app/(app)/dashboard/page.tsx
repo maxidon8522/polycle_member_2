@@ -459,7 +459,7 @@ export default async function DashboardPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <Card
           title="今週のデイリーレポート"
-          description="自分とチームの最新レポートを確認して温度感を掴みます。"
+          description="自分とチームの最新レポートを確認しましょう！"
           footer={`${teamReportsThisWeek.length}件 / ${weekLabel}`}
         >
           {teamReportsThisWeek.length === 0 ? (

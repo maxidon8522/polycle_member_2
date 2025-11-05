@@ -3,7 +3,8 @@ import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { listTasks } from "@/server/repositories/tasks-repository";
 import { TasksGantt } from "@/components/tasks/tasks-gantt";
-import type { Task } from "@/types";
+import { TasksFilter } from "@/components/tasks/tasks-filter";
+import type { Task, TaskPriority, TaskStatus } from "@/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -12,6 +13,106 @@ const toTimestamp = (value?: string | null): number | null => {
   if (!value) return null;
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
+};
+
+const normalizeText = (value?: string | null): string =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const PRIORITY_WEIGHT: Record<Task["priority"], number> = {
+  高: 0,
+  中: 1,
+  低: 2,
+};
+
+const compareDueDate = (left?: string, right?: string): number => {
+  const leftValue = toTimestamp(left);
+  const rightValue = toTimestamp(right);
+  if (leftValue === null && rightValue === null) return 0;
+  if (leftValue === null) return 1;
+  if (rightValue === null) return -1;
+  return leftValue - rightValue;
+};
+
+const applyTaskFilters = (
+  tasks: Task[],
+  filters: {
+    assignee?: string;
+    status?: TaskStatus;
+    priority?: TaskPriority;
+    projectName?: string;
+    dueBefore?: string;
+    category?: string;
+  },
+): Task[] => {
+  const assigneeFilter = normalizeText(filters.assignee);
+  const projectFilter = normalizeText(filters.projectName);
+  const dueBeforeValue = toTimestamp(filters.dueBefore);
+  const categoryFilter = normalizeText(filters.category);
+
+  return tasks
+    .filter((task) => {
+      if (assigneeFilter) {
+        const matchesAssignee = normalizeText(task.assigneeName).includes(
+          assigneeFilter,
+        );
+        if (!matchesAssignee) {
+          return false;
+        }
+      }
+
+      if (filters.status && task.status !== filters.status) {
+        return false;
+      }
+
+      if (filters.priority && task.priority !== filters.priority) {
+        return false;
+      }
+
+      if (projectFilter) {
+        const matchesProject = normalizeText(task.projectName).includes(
+          projectFilter,
+        );
+        if (!matchesProject) {
+          return false;
+        }
+      }
+
+      if (dueBeforeValue !== null) {
+        const taskDue = toTimestamp(task.dueDate);
+        if (taskDue === null || taskDue > dueBeforeValue) {
+          return false;
+        }
+      }
+
+      if (categoryFilter) {
+        const tags = task.tags?.map((tag) => normalizeText(tag)) ?? [];
+        if (!tags.includes(categoryFilter)) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      const dueCompare = compareDueDate(a.dueDate, b.dueDate);
+      if (dueCompare !== 0) {
+        return dueCompare;
+      }
+
+      const priorityCompare =
+        PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
+      if (priorityCompare !== 0) {
+        return priorityCompare;
+      }
+
+      const updatedDiff =
+        (toTimestamp(b.updatedAt) ?? 0) - (toTimestamp(a.updatedAt) ?? 0);
+      if (updatedDiff !== 0) {
+        return updatedDiff;
+      }
+
+      return a.taskId.localeCompare(b.taskId);
+    });
 };
 
 const buildTaskSummary = (tasks: Task[]) => {
@@ -33,9 +134,81 @@ const buildTaskSummary = (tasks: Task[]) => {
   return { now, overdueCount, dueSoonCount };
 };
 
-export default async function TasksPage() {
-  const tasks = await listTasks();
-  const { now, overdueCount, dueSoonCount } = buildTaskSummary(tasks);
+type PageProps = {
+  searchParams?: Record<string, string | string[] | undefined>;
+};
+
+const TASK_STATUSES: TaskStatus[] = [
+  "未着手",
+  "進行中",
+  "レビュー待ち",
+  "完了",
+  "保留",
+  "棄却",
+];
+
+const TASK_PRIORITIES: TaskPriority[] = ["高", "中", "低"];
+
+const getSingleParam = (value?: string | string[]): string | undefined => {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return typeof value === "string" ? value : undefined;
+};
+
+const isTaskStatus = (value?: string): value is TaskStatus => {
+  if (!value) return false;
+  return TASK_STATUSES.includes(value as TaskStatus);
+};
+
+const isTaskPriority = (value?: string): value is TaskPriority => {
+  if (!value) return false;
+  return TASK_PRIORITIES.includes(value as TaskPriority);
+};
+
+export default async function TasksPage({ searchParams }: PageProps) {
+  const assigneeFilter = getSingleParam(searchParams?.assignee);
+  const statusParam = getSingleParam(searchParams?.status);
+  const statusFilter = isTaskStatus(statusParam) ? statusParam : undefined;
+  const dueBeforeFilter = getSingleParam(searchParams?.dueBefore);
+  const priorityParam = getSingleParam(searchParams?.priority);
+  const priorityFilter = isTaskPriority(priorityParam)
+    ? priorityParam
+    : undefined;
+  const categoryFilter = getSingleParam(searchParams?.category);
+  const projectFilter = getSingleParam(searchParams?.project);
+
+  const allTasks = await listTasks();
+
+  const filteredTasks = applyTaskFilters(allTasks, {
+    assignee: assigneeFilter,
+    status: statusFilter,
+    priority: priorityFilter,
+    projectName: projectFilter,
+    dueBefore: dueBeforeFilter,
+    category: categoryFilter,
+  });
+
+  const { now, overdueCount, dueSoonCount } = buildTaskSummary(filteredTasks);
+
+  const totalCount = allTasks.length;
+  const filteredCount = filteredTasks.length;
+
+  const assigneeOptions = allTasks
+    .map((task) => task.assigneeName)
+    .filter(Boolean);
+  const projectOptions = allTasks
+    .map((task) => task.projectName)
+    .filter(Boolean);
+  const categoryOptions = allTasks.flatMap((task) => task.tags ?? []);
+
+  const footerTextParts = [
+    filteredCount === totalCount
+      ? `取得件数: ${filteredCount}`
+      : `取得件数: ${filteredCount} / 総数 ${totalCount}`,
+    `期限超過: ${overdueCount}`,
+    `3日以内の期限: ${dueSoonCount}`,
+  ];
 
   return (
     <div className="space-y-6">
@@ -56,26 +229,27 @@ export default async function TasksPage() {
 
       <Card
         title="フィルタ / 並び替え"
-        description="各種フィルタリングは後続で実装。サーバ側でGoogle Sheetsと連携します。"
+        description="担当者や期限、カテゴリを組み合わせてタスクを絞り込みます。"
       >
-        <div className="grid gap-4 md:grid-cols-3">
-          {["担当者", "状態", "期限", "重要度", "カテゴリ", "プロジェクト"].map(
-            (label) => (
-              <div key={label} className="flex flex-col gap-1 text-sm">
-                <span className="text-xs font-medium text-[#ad7a46]">{label}</span>
-                <div className="rounded-lg border border-dashed border-[#ead8c4] bg-[#fffaf5] px-3 py-2 text-[#b59b85]">
-                  UI実装予定
-                </div>
-              </div>
-            ),
-          )}
-        </div>
+        <TasksFilter
+          assignees={assigneeOptions}
+          projects={projectOptions}
+          categories={categoryOptions}
+          selected={{
+            assignee: assigneeFilter,
+            status: statusFilter,
+            dueBefore: dueBeforeFilter,
+            priority: priorityFilter,
+            category: categoryFilter,
+            project: projectFilter,
+          }}
+        />
       </Card>
 
       <Card
         title="タスク一覧"
         description="シートのタスクタブと同期します。状態変更は詳細画面で実行します。"
-        footer={`取得件数: ${tasks.length} | 期限超過: ${overdueCount} | 3日以内の期限: ${dueSoonCount}`}
+        footer={footerTextParts.join(" | ")}
       >
         <div className="overflow-hidden rounded-xl border border-dashed border-[#ead8c4] bg-[#fffaf5]">
           <table className="min-w-full divide-y divide-[#ead8c4] text-sm">
@@ -91,7 +265,7 @@ export default async function TasksPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f1e6d8] bg-[#fffdf9] text-[#5b4c40]">
-              {tasks.length === 0 ? (
+              {filteredTasks.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -101,7 +275,7 @@ export default async function TasksPage() {
                   </td>
                 </tr>
               ) : (
-                tasks.map((task) => (
+                filteredTasks.map((task) => (
                   <tr
                     key={task.taskId}
                     className="group transition-colors duration-200 hover:bg-[#f9efe3]/60"
@@ -199,8 +373,9 @@ export default async function TasksPage() {
         title="ガントチャート"
         description="同じタスクデータを開始日・期限で可視化します。表示対象は開始日または期限が設定されているタスクのみです。"
       >
-        <TasksGantt tasks={tasks} />
+        <TasksGantt tasks={filteredTasks} />
       </Card>
     </div>
   );
 }
+

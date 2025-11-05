@@ -1,13 +1,130 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
+import { DailyReportsFilter } from "@/components/daily-reports/daily-reports-filter";
 import { listDailyReports } from "@/server/repositories/daily-reports-repository";
+import type { DailyReport } from "@/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function DailyReportsPage() {
-  const reports = await listDailyReports({});
+type PageProps = {
+  searchParams?: Record<string, string | string[] | undefined>;
+};
+
+const normalize = (value: string) => value.trim().toLowerCase();
+
+const parseTagsParam = (
+  value: string | string[] | undefined,
+): string[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => entry.split(","))
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const matchesKeyword = (report: DailyReport, keyword?: string) => {
+  if (!keyword) return true;
+  const normalizedKeyword = normalize(keyword);
+  if (!normalizedKeyword) return true;
+  const haystack = [
+    report.satisfactionToday,
+    report.doneToday,
+    report.goodMoreBackground,
+    report.moreNext,
+    report.todoTomorrow,
+    report.wishTomorrow,
+    report.personalNews,
+    report.tags.join(" "),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(normalizedKeyword);
+};
+
+const matchesTags = (report: DailyReport, tags: string[]) => {
+  if (tags.length === 0) return true;
+  const reportTags = report.tags.map((tag) => normalize(tag));
+  return tags.every((tag) => reportTags.includes(normalize(tag)));
+};
+
+const matchesChannel = (report: DailyReport, channel?: string) => {
+  if (!channel) return true;
+  return report.channelId === channel;
+};
+
+const matchesUser = (report: DailyReport, userSlug?: string) => {
+  if (!userSlug) return true;
+  return normalize(report.userSlug) === normalize(userSlug);
+};
+
+export default async function DailyReportsPage({ searchParams }: PageProps) {
+  const userFilter =
+    typeof searchParams?.user === "string" ? searchParams.user : undefined;
+  const channelFilter =
+    typeof searchParams?.channel === "string"
+      ? searchParams.channel
+      : undefined;
+  const keywordFilter =
+    typeof searchParams?.q === "string" ? searchParams.q : undefined;
+  const tagsFilter = parseTagsParam(searchParams?.tags);
+  const weekStart =
+    typeof searchParams?.weekStart === "string"
+      ? searchParams.weekStart
+      : undefined;
+  const weekEnd =
+    typeof searchParams?.weekEnd === "string"
+      ? searchParams.weekEnd
+      : undefined;
+
+  const reports = await listDailyReports({
+    weekStart,
+    weekEnd,
+  });
+
+  const userOptions = Array.from(
+    reports.reduce((accumulator, report) => {
+      if (!accumulator.has(report.userSlug)) {
+        accumulator.set(report.userSlug, report.userName);
+      }
+      return accumulator;
+    }, new Map<string, string>()),
+  ).map(([value, label]) => ({ value, label }));
+
+  const channelOptions = Array.from(
+    reports.reduce((accumulator, report) => {
+      if (report.channelId && !accumulator.has(report.channelId)) {
+        accumulator.set(report.channelId, report.channelId);
+      }
+      return accumulator;
+    }, new Map<string, string>()),
+  ).map(([value, label]) => ({ value, label }));
+
+  const tagOptions = Array.from(
+    new Set(reports.flatMap((report) => report.tags)),
+  ).filter(Boolean);
+
+  const filteredReports = reports.filter(
+    (report) =>
+      matchesUser(report, userFilter) &&
+      matchesChannel(report, channelFilter) &&
+      matchesKeyword(report, keywordFilter) &&
+      matchesTags(report, tagsFilter),
+  );
+
+  const filteredCount = filteredReports.length;
+  const totalCount = reports.length;
+  const footerText =
+    filteredCount === totalCount
+      ? `取得件数: ${filteredCount}`
+      : `取得件数: ${filteredCount} / 総数 ${totalCount}`;
 
   return (
     <div className="space-y-6">
@@ -30,44 +147,25 @@ export default async function DailyReportsPage() {
 
       <Card
         title="フィルタ"
-        description="ユーザー / チャンネル / キーワード / タグで絞り込み可能にします。"
+        description="ユーザー / チャンネル / キーワード / タグを組み合わせて絞り込みできます。"
       >
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-xs font-medium text-[#ad7a46]">ユーザー</span>
-            <div className="rounded-lg border border-dashed border-[#ead8c4] bg-[#fffaf5] px-3 py-2 text-[#b59b85]">
-              フィルタ UI 実装予定
-            </div>
-          </div>
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-xs font-medium text-[#ad7a46]">
-              チャンネル
-            </span>
-            <div className="rounded-lg border border-dashed border-[#ead8c4] bg-[#fffaf5] px-3 py-2 text-[#b59b85]">
-              フィルタ UI 実装予定
-            </div>
-          </div>
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-xs font-medium text-[#ad7a46]">
-              キーワード
-            </span>
-            <div className="rounded-lg border border-dashed border-[#ead8c4] bg-[#fffaf5] px-3 py-2 text-[#b59b85]">
-              フィルタ UI 実装予定
-            </div>
-          </div>
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-xs font-medium text-[#ad7a46]">タグ</span>
-            <div className="rounded-lg border border-dashed border-[#ead8c4] bg-[#fffaf5] px-3 py-2 text-[#b59b85]">
-              Chip UI 実装予定
-            </div>
-          </div>
-        </div>
+        <DailyReportsFilter
+          users={userOptions}
+          channels={channelOptions}
+          tags={tagOptions}
+          selected={{
+            user: userFilter,
+            channel: channelFilter,
+            keyword: keywordFilter,
+            tags: tagsFilter,
+          }}
+        />
       </Card>
 
       <Card
         title="今週の一覧"
         description="Google Sheetsのデータをサーバサイドで取得し、週切替をサポートします。"
-        footer={`取得件数: ${reports.length}`}
+        footer={footerText}
       >
         <div className="overflow-hidden rounded-xl border border-dashed border-[#ead8c4] bg-[#fffaf5]">
           <table className="min-w-full divide-y divide-[#ead8c4] text-sm">
@@ -82,7 +180,7 @@ export default async function DailyReportsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f1e6d8] bg-[#fffdf9] text-[#5b4c40]">
-              {reports.length === 0 ? (
+              {filteredReports.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -92,7 +190,7 @@ export default async function DailyReportsPage() {
                   </td>
                 </tr>
               ) : (
-                reports.map((report) => (
+                filteredReports.map((report) => (
                   <tr
                     key={report.reportId}
                     className="group transition-colors duration-200 hover:bg-[#f9efe3]/60"
