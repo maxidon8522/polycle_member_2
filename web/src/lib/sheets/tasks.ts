@@ -59,14 +59,16 @@ const splitSheetValues = (values: string[][]) => {
   };
 };
 
-const sanitizeString = (value: unknown): string => {
-  return safeString(value)
-    .normalize("NFKC")
-    .replace(/\u200B/g, "")
-    .replace(/\+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-};
+const normalizeCell = (value?: string): string =>
+  typeof value === "string"
+    ? value
+        .normalize("NFKC")
+        .replace(/\u200B/g, "")
+        .replace(/\+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase()
+    : "";
 
 const mapRowToTaskHistory = (
   row: string[],
@@ -220,29 +222,38 @@ const mapRowToTask = (
     return null;
   }
 
-  const tagsCell = sanitizeString(row[11]);
+  const tagsCell = safeString(row[11]);
   const tags = tagsCell
     ? tagsCell
         .split(/\s+/)
-        .map((tag) => sanitizeString(tag.replace(/^#/, "")))
+        .map((tag) =>
+          tag
+            .replace(/^#/, "")
+            .normalize("NFKC")
+            .replace(/\u200B/g, "")
+            .replace(/\+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase(),
+        )
         .filter(Boolean)
     : [];
 
   return {
-    taskId: sanitizeString(taskId),
-    projectName: sanitizeString(row[1]),
-    title: sanitizeString(row[2]),
-    assigneeName: sanitizeString(row[3]),
-    status: sanitizeString(row[4]) as Task["status"],
-    dueDate: sanitizeString(row[5]) || undefined,
-    startDate: sanitizeString(row[6]) || undefined,
-    doneDate: sanitizeString(row[7]) || undefined,
+    taskId,
+    projectName: safeString(row[1]),
+    title: safeString(row[2]),
+    assigneeName: safeString(row[3]),
+    status: safeString(row[4]) as Task["status"],
+    dueDate: safeString(row[5]) || undefined,
+    startDate: safeString(row[6]) || undefined,
+    doneDate: safeString(row[7]) || undefined,
     detailUrl: safeString(row[8]).trim() || undefined,
     notes: safeString(row[9]).trim() || undefined,
-    priority: sanitizeString(row[10]) as Task["priority"],
+    priority: safeString(row[10]) as Task["priority"],
     tags,
-    createdAt: sanitizeString(row[12]) || "",
-    updatedAt: sanitizeString(row[13]) || "",
+    createdAt: safeString(row[12]) || "",
+    updatedAt: safeString(row[13]) || "",
     history,
   };
 };
@@ -322,7 +333,33 @@ export const fetchTasks = async (): Promise<Task[]> => {
     .map((row) => {
       const taskId = safeString(row[0]);
       const history = historyByTaskId.get(taskId) ?? [];
-      return mapRowToTask(row, history);
+      const task = mapRowToTask(row, history);
+      if (!task) {
+        return null;
+      }
+
+      const normalizeOptional = (value?: string) => {
+        const normalized = normalizeCell(value);
+        return normalized || undefined;
+      };
+
+      return {
+        ...task,
+        taskId: normalizeCell(task.taskId),
+        title: normalizeCell(task.title),
+        assigneeName: normalizeCell(task.assigneeName),
+        projectName: normalizeCell(task.projectName),
+        status: normalizeCell(task.status) as Task["status"],
+        priority: normalizeCell(task.priority) as Task["priority"],
+        dueDate: normalizeOptional(task.dueDate),
+        startDate: normalizeOptional(task.startDate),
+        doneDate: normalizeOptional(task.doneDate),
+        detailUrl: task.detailUrl?.trim() || undefined,
+        notes: normalizeOptional(task.notes),
+        tags: (task.tags ?? []).map((tag) => normalizeCell(tag)).filter(Boolean),
+        createdAt: normalizeCell(task.createdAt) || new Date().toISOString(),
+        updatedAt: normalizeCell(task.updatedAt) || new Date().toISOString(),
+      } satisfies Task;
     })
     .filter((task): task is Task => task !== null);
 };
