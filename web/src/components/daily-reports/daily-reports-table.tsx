@@ -11,7 +11,9 @@ type DailyReportsTableProps = {
 
 type SatisfactionFilter = "all" | "high" | "low";
 
-const truncate = (value: string, maxLength = 20): string => {
+const PREVIEW_LENGTH = 9;
+
+const truncate = (value: string, maxLength = PREVIEW_LENGTH): string => {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (!normalized) {
     return "";
@@ -311,26 +313,59 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
                       {renderPreview(report.satisfactionToday)}
                     </span>
                   </td>
+                  {(
+                    [
+                      ["doneToday", report.doneToday, "Done"],
+                      [
+                        "goodMoreBackground",
+                        report.goodMoreBackground,
+                        "Good / More + 背景",
+                      ],
+                      ["moreNext", report.moreNext, "More Next"],
+                      ["todoTomorrow", report.todoTomorrow, "明日タスク"],
+                      ["wishTomorrow", report.wishTomorrow, "明日やりたい"],
+                      ["personalNews", report.personalNews, "個人ニュース"],
+                    ] satisfies Array<[string, string, string]>
+                  ).map(([key, value, label]) => (
+                    <td key={key} className="px-4 py-3">
+                      <div className="relative group/field">
+                        <span className="block">{renderPreview(value)}</span>
+                        {value && (
+                          <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 hidden w-[320px] rounded-xl border border-[#ead8c4] bg-white p-4 text-xs text-[#3d3128] shadow-lg group-hover/field:block">
+                            <div className="font-semibold text-[#ad7a46]">
+                              {label}
+                            </div>
+                            <div className="mt-2 whitespace-pre-wrap">
+                              {value}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  ))}
                   <td className="px-4 py-3">
-                    {renderPreview(report.doneToday)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {renderPreview(report.goodMoreBackground)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {renderPreview(report.moreNext)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {renderPreview(report.todoTomorrow)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {renderPreview(report.wishTomorrow)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {renderPreview(report.personalNews)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {renderTagsPreview(report.tags)}
+                    <div className="relative group/field">
+                      <span className="block">
+                        {renderTagsPreview(report.tags)}
+                      </span>
+                      {report.tags.length > 0 && (
+                        <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 hidden w-[320px] rounded-xl border border-[#ead8c4] bg-white p-4 text-xs text-[#3d3128] shadow-lg group-hover/field:block">
+                          <div className="font-semibold text-[#ad7a46]">
+                            タグ
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {report.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex rounded-full border border-[#ead8c4] bg-[#fffaf5] px-3 py-1 text-xs"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
