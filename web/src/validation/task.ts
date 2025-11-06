@@ -14,6 +14,7 @@ export const taskUpsertSchema = z.object({
   notes: z.string().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
+  sheetTitle: z.string().min(1).optional(),
 });
 
 export type TaskUpsertSchema = z.infer<typeof taskUpsertSchema>;

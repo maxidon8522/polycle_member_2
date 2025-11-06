@@ -3,9 +3,9 @@ import { env } from "@/config/env";
 import { retryWithBackoff } from "@/lib/retry";
 import { getSheetsClient } from "./google";
 
-const TASK_SHEET_NAME = "tasks";
+const DEFAULT_TASK_SHEET_NAME = "tasks";
 const TASK_HISTORY_SHEET_NAME = "task_history";
-const TASK_SHEET_RANGE = `'${TASK_SHEET_NAME}'!A:N`;
+const TASK_SHEET_COLUMNS_RANGE = "A:N";
 const TASK_HISTORY_RANGE = `'${TASK_HISTORY_SHEET_NAME}'!A:G`;
 const KNOWN_HISTORY_TYPES: readonly TaskHistoryEvent["type"][] = [
   "status_change",
@@ -47,6 +47,40 @@ const isRangeParseError = (message: string): boolean => {
   return message.includes("Unable to parse range");
 };
 
+const escapeSheetName = (name: string): string => name.replace(/'/g, "''");
+
+const normalizeSheetTitle = (title: string): string =>
+  title.trim().toLowerCase();
+
+const TASK_SHEET_EXCLUDE = new Set([
+  normalizeSheetTitle(TASK_HISTORY_SHEET_NAME),
+  "taskhistory",
+  "task-history",
+  "task history",
+]);
+
+const isTaskSheetTitle = (title: string): boolean => {
+  if (!title) return false;
+  const normalized = normalizeSheetTitle(title);
+  if (!normalized) return false;
+  if (TASK_SHEET_EXCLUDE.has(normalized)) {
+    return false;
+  }
+  if (normalized === normalizeSheetTitle(DEFAULT_TASK_SHEET_NAME)) {
+    return true;
+  }
+  if (normalized.includes("タスク")) {
+    return true;
+  }
+  if (normalized.includes("task")) {
+    return true;
+  }
+  return false;
+};
+
+const buildTaskRange = (title: string): string =>
+  `'${escapeSheetName(title)}'!${TASK_SHEET_COLUMNS_RANGE}`;
+
 const splitSheetValues = (values: string[][]) => {
   if (values.length === 0) {
     return { header: [] as string[], rows: [] as string[][] };
@@ -57,6 +91,13 @@ const splitSheetValues = (values: string[][]) => {
     header: header ?? [],
     rows,
   };
+};
+
+type TaskSheetData = {
+  title: string;
+  normalizedTitle: string;
+  header: string[];
+  rows: string[][];
 };
 
 const normalizeCell = (value?: string): string =>
@@ -163,51 +204,110 @@ const mapRowToTaskHistory = (
   };
 };
 
-export const readTasks = async (): Promise<string[][]> => {
+export const readTasks = async (): Promise<TaskSheetData[]> => {
   const spreadsheetId = env.server.SHEETS_TASKS_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
 
   try {
-    const values = await retryWithBackoff<string[][] | null>(async (attempt) => {
-      try {
-        const range = TASK_SHEET_RANGE;
-        if (attempt === 0) {
-          console.info("sheets.tasks.read.request", {
-            spreadsheetId,
-            range,
-          });
-        }
-        const response = await sheets.spreadsheets.values.get({
-          spreadsheetId,
-          range,
-          valueRenderOption: "UNFORMATTED_VALUE",
-        });
-        return response.data.values ?? [];
-      } catch (error) {
-        const errorMessage = extractErrorMessage(error);
-        if (isRangeParseError(errorMessage)) {
-          if (attempt === 0) {
-            console.warn("sheets.tasks.read.missing_sheet", {
-              spreadsheetId,
-              range: TASK_SHEET_RANGE,
-            });
-          }
-          return null;
-        }
-        console.error("sheets.tasks.read.error", {
-          attempt,
-          spreadsheetId,
-          error: errorMessage,
-        });
-        throw error;
-      }
-    });
+    const metadata = await retryWithBackoff(() =>
+      sheets.spreadsheets.get({
+        spreadsheetId,
+        fields: "sheets.properties.title",
+      }),
+    );
 
-    if (values === null) {
+    const sheetTitles = (metadata.data.sheets ?? [])
+      .map((sheet) => sheet.properties?.title)
+      .filter((title): title is string => typeof title === "string" && title.trim().length > 0)
+      .filter((title) => isTaskSheetTitle(title));
+
+    const uniqueTitles: string[] = [];
+    const seenTitles = new Set<string>();
+    for (const title of sheetTitles) {
+      const normalized = normalizeSheetTitle(title);
+      if (seenTitles.has(normalized)) {
+        continue;
+      }
+      seenTitles.add(normalized);
+      uniqueTitles.push(title);
+    }
+
+    if (uniqueTitles.length === 0) {
+      console.warn("sheets.tasks.read.no_task_sheets", {
+        spreadsheetId,
+      });
       return [];
     }
 
-    return values;
+    const results = await Promise.all(
+      uniqueTitles.map(async (title) => {
+        const range = buildTaskRange(title);
+        try {
+          const values = await retryWithBackoff<string[][] | null>(async (attempt) => {
+            try {
+              if (attempt === 0) {
+                console.info("sheets.tasks.read.request", {
+                  spreadsheetId,
+                  sheetTitle: title,
+                  range,
+                });
+              }
+              const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range,
+                valueRenderOption: "UNFORMATTED_VALUE",
+              });
+              return response.data.values ?? [];
+            } catch (error) {
+              const errorMessage = extractErrorMessage(error);
+              if (isRangeParseError(errorMessage)) {
+                if (attempt === 0) {
+                  console.warn("sheets.tasks.read.missing_sheet", {
+                    spreadsheetId,
+                    sheetTitle: title,
+                    range,
+                  });
+                }
+                return null;
+              }
+              console.error("sheets.tasks.read.error", {
+                attempt,
+                spreadsheetId,
+                sheetTitle: title,
+                range,
+                error: errorMessage,
+              });
+              throw error;
+            }
+          });
+
+          if (values === null) {
+            return null;
+          }
+
+          const { header, rows } = splitSheetValues(values);
+
+          return {
+            title,
+            normalizedTitle: normalizeSheetTitle(title),
+            header,
+            rows,
+          } satisfies TaskSheetData;
+        } catch (error) {
+          const errorMessage = extractErrorMessage(error);
+          console.warn("sheets.tasks.read.single_sheet_failed", {
+            spreadsheetId,
+            sheetTitle: title,
+            error: errorMessage,
+          });
+          return null;
+        }
+      }),
+    );
+
+    return results.filter(
+      (item): item is TaskSheetData => item !== null,
+    );
   } catch (error) {
     const errorMessage = extractErrorMessage(error);
     console.warn("sheets.tasks.read.failed", {
@@ -275,6 +375,7 @@ export const readTaskHistory = async (): Promise<string[][]> => {
 const mapRowToTask = (
   row: string[],
   history: TaskHistoryEvent[],
+  sheetTitle: string,
 ): Task | null => {
   const taskId = safeString(row[0]);
   if (!taskId) {
@@ -313,6 +414,7 @@ const mapRowToTask = (
     tags,
     createdAt: safeString(row[12]) || "",
     updatedAt: safeString(row[13]) || "",
+    sheetTitle,
     history,
   };
 };
@@ -334,33 +436,88 @@ const toTaskRow = (task: Task): (string | number)[] => [
   task.updatedAt ?? "",
 ];
 
-const findTaskRowIndex = (
-  rows: string[][],
+type TaskRowLocator = {
+  sheet: TaskSheetData;
+  sheetRowNumber: number;
+};
+
+const findTaskRowLocator = (
+  sheets: TaskSheetData[],
   taskId: string,
-): number | null => {
-  if (rows.length === 0) {
+  preferredSheetTitle?: string,
+): TaskRowLocator | null => {
+  if (sheets.length === 0) {
     return null;
   }
 
   const normalizedTaskId = taskId.trim();
+  if (!normalizedTaskId) {
+    return null;
+  }
 
-  for (let index = 0; index < rows.length; index += 1) {
-    const rowTaskId = safeString(rows[index]?.[0]);
-    if (rowTaskId === normalizedTaskId) {
-      return index + 2;
+  const preferredNormalized = preferredSheetTitle
+    ? normalizeSheetTitle(preferredSheetTitle)
+    : null;
+
+  const orderedSheets =
+    preferredNormalized === null
+      ? sheets
+      : [
+          ...sheets.filter((sheet) => sheet.normalizedTitle === preferredNormalized),
+          ...sheets.filter((sheet) => sheet.normalizedTitle !== preferredNormalized),
+        ];
+
+  for (const sheet of orderedSheets) {
+    for (let index = 0; index < sheet.rows.length; index += 1) {
+      const row = sheet.rows[index] ?? [];
+      const rowTaskId = safeString(row[0]);
+      if (rowTaskId === normalizedTaskId) {
+        return {
+          sheet,
+          sheetRowNumber: index + 2,
+        };
+      }
     }
   }
 
   return null;
 };
 
+const resolveTargetSheetTitle = (
+  sheets: TaskSheetData[],
+  preferredSheetTitle?: string,
+): string => {
+  if (preferredSheetTitle) {
+    const normalizedPreferred = normalizeSheetTitle(preferredSheetTitle);
+    const preferred = sheets.find(
+      (sheet) => sheet.normalizedTitle === normalizedPreferred,
+    );
+    if (preferred) {
+      return preferred.title;
+    }
+  }
+
+  const defaultNormalized = normalizeSheetTitle(DEFAULT_TASK_SHEET_NAME);
+  const defaultSheet = sheets.find(
+    (sheet) => sheet.normalizedTitle === defaultNormalized,
+  );
+  if (defaultSheet) {
+    return defaultSheet.title;
+  }
+
+  if (sheets.length > 0) {
+    return sheets[0].title;
+  }
+
+  return preferredSheetTitle ?? DEFAULT_TASK_SHEET_NAME;
+};
+
 export const fetchTasks = async (): Promise<Task[]> => {
-  const [taskValues, historyValues] = await Promise.all([
+  const [taskSheets, historyValues] = await Promise.all([
     readTasks(),
     readTaskHistory(),
   ]);
 
-  const { rows: taskRows } = splitSheetValues(taskValues);
   const { rows: historyRows } = splitSheetValues(historyValues);
 
   const historyByTaskId = new Map<string, TaskHistoryEvent[]>();
@@ -390,43 +547,47 @@ export const fetchTasks = async (): Promise<Task[]> => {
 
   const normalizedTasks: Task[] = [];
 
-  for (const row of taskRows) {
-    const taskId = safeString(row[0]);
-    const history = historyByTaskId.get(taskId) ?? [];
-    const task = mapRowToTask(row, history);
-    if (!task) {
-      continue;
+  for (const sheet of taskSheets) {
+    for (const row of sheet.rows) {
+      const taskId = safeString(row[0]);
+      const history = historyByTaskId.get(taskId) ?? [];
+      const task = mapRowToTask(row, history, sheet.title);
+      if (!task) {
+        continue;
+      }
+
+      const normalizeOptional = (value?: string) => {
+        const normalized = normalizeCell(value);
+        return normalized || undefined;
+      };
+
+      const normalizeOptionalDate = (value?: string) => {
+        const normalizedValue = normalizeDateCell(value);
+        return normalizedValue || undefined;
+      };
+
+      normalizedTasks.push({
+        ...task,
+        taskId: normalizeCell(task.taskId),
+        title: normalizeCell(task.title),
+        assigneeName: normalizeCell(task.assigneeName),
+        projectName: normalizeCell(task.projectName),
+        status: normalizeCell(task.status) as Task["status"],
+        priority: normalizeCell(task.priority) as Task["priority"],
+        dueDate: normalizeOptionalDate(task.dueDate),
+        startDate: normalizeOptionalDate(task.startDate),
+        doneDate: normalizeOptionalDate(task.doneDate),
+        detailUrl: task.detailUrl?.trim() || undefined,
+        notes: normalizeOptional(task.notes),
+        tags: (task.tags ?? [])
+          .map((tag) => normalizeCell(tag))
+          .filter(Boolean),
+        createdAt:
+          normalizeOptional(task.createdAt) ?? new Date().toISOString(),
+        updatedAt:
+          normalizeOptional(task.updatedAt) ?? new Date().toISOString(),
+      });
     }
-
-    const normalizeOptional = (value?: string) => {
-      const normalized = normalizeCell(value);
-      return normalized || undefined;
-    };
-
-    const normalizeOptionalDate = (value?: string) => {
-      const normalizedValue = normalizeDateCell(value);
-      return normalizedValue || undefined;
-    };
-
-    normalizedTasks.push({
-      ...task,
-      taskId: normalizeCell(task.taskId),
-      title: normalizeCell(task.title),
-      assigneeName: normalizeCell(task.assigneeName),
-      projectName: normalizeCell(task.projectName),
-      status: normalizeCell(task.status) as Task["status"],
-      priority: normalizeCell(task.priority) as Task["priority"],
-      dueDate: normalizeOptionalDate(task.dueDate),
-      startDate: normalizeOptionalDate(task.startDate),
-      doneDate: normalizeOptionalDate(task.doneDate),
-      detailUrl: task.detailUrl?.trim() || undefined,
-      notes: normalizeOptional(task.notes),
-      tags: (task.tags ?? [])
-        .map((tag) => normalizeCell(tag))
-        .filter(Boolean),
-      createdAt: normalizeOptional(task.createdAt) ?? new Date().toISOString(),
-      updatedAt: normalizeOptional(task.updatedAt) ?? new Date().toISOString(),
-    });
   }
 
   return normalizedTasks;
@@ -435,14 +596,19 @@ export const fetchTasks = async (): Promise<Task[]> => {
 export const upsertTask = async (task: Task): Promise<void> => {
   const spreadsheetId = env.server.SHEETS_TASKS_SPREADSHEET_ID;
   const sheets = await getSheetsClient();
-  const values = await readTasks();
-  const { rows } = splitSheetValues(values);
-  const rowIndex = findTaskRowIndex(rows, task.taskId);
+  const taskSheets = await readTasks();
+  const locator = findTaskRowLocator(
+    taskSheets,
+    task.taskId,
+    task.sheetTitle,
+  );
 
   const payload = [toTaskRow(task)];
 
-  if (rowIndex) {
-    const range = `'${TASK_SHEET_NAME}'!A${rowIndex}:N${rowIndex}`;
+  if (locator) {
+    const targetSheetTitle = locator.sheet.title;
+    const range = `'${escapeSheetName(targetSheetTitle)}'!A${locator.sheetRowNumber}:N${locator.sheetRowNumber}`;
+    task.sheetTitle = targetSheetTitle;
     await retryWithBackoff(async (attempt) => {
       try {
         await sheets.spreadsheets.values.update({
@@ -458,6 +624,7 @@ export const upsertTask = async (task: Task): Promise<void> => {
           attempt,
           spreadsheetId,
           range,
+          sheetTitle: targetSheetTitle,
           taskId: task.taskId,
           error: errorMessage,
         });
@@ -465,7 +632,12 @@ export const upsertTask = async (task: Task): Promise<void> => {
       }
     });
   } else {
-    const range = `'${TASK_SHEET_NAME}'!A:N`;
+    const targetSheetTitle = resolveTargetSheetTitle(
+      taskSheets,
+      task.sheetTitle,
+    );
+    const range = `'${escapeSheetName(targetSheetTitle)}'!${TASK_SHEET_COLUMNS_RANGE}`;
+    task.sheetTitle = targetSheetTitle;
     await retryWithBackoff(async (attempt) => {
       try {
         await sheets.spreadsheets.values.append({
@@ -482,6 +654,7 @@ export const upsertTask = async (task: Task): Promise<void> => {
           attempt,
           spreadsheetId,
           range,
+          sheetTitle: targetSheetTitle,
           taskId: task.taskId,
           error: errorMessage,
         });

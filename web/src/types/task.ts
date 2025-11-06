@@ -34,6 +34,7 @@ export interface Task {
   updatedAt: string;
   history: TaskHistoryEvent[];
   tags?: string[];
+  sheetTitle?: string;
 }
 
 export interface TaskUpsertInput
