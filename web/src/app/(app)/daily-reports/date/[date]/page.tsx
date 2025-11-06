@@ -166,7 +166,7 @@ export default async function DailyReportDatePage({
                 </div>
                 <Link
                   href={`/daily-reports/${report.reportId}`}
-                  className={buttonVariants("outline")}
+                  className={buttonVariants("secondary")}
                 >
                   個別の詳細を見る
                 </Link>
