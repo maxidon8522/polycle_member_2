@@ -8,6 +8,8 @@ type TasksTableProps = {
   tasks: Task[];
 };
 
+const PRIORITY_FILTER_OPTIONS: Task["priority"][] = ["高", "中", "低"];
+
 const normalizeText = (value?: string | null) =>
   (value ?? "")
     .normalize("NFKC")
@@ -42,16 +44,96 @@ const toTimestamp = (value?: string | null): number | null => {
 
 export const TasksTable = ({ tasks }: TasksTableProps) => {
   const [query, setQuery] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState<"all" | Task["priority"]>(
+    "all",
+  );
+  const [dueFrom, setDueFrom] = useState("");
+  const [dueTo, setDueTo] = useState("");
   const [now] = useState(() => Date.now());
 
   const normalizedQuery = normalizeText(query);
 
-  const filteredTasks = useMemo(() => {
-    if (!normalizedQuery) {
-      return tasks;
+  const dueFromTimestamp = useMemo(() => {
+    if (!dueFrom) {
+      return null;
     }
-    return tasks.filter((task) => matchesQuery(task, normalizedQuery));
-  }, [tasks, normalizedQuery]);
+    const timestamp = Date.parse(dueFrom);
+    return Number.isNaN(timestamp) ? null : timestamp;
+  }, [dueFrom]);
+
+  const dueToTimestamp = useMemo(() => {
+    if (!dueTo) {
+      return null;
+    }
+    const timestamp = Date.parse(dueTo);
+    if (Number.isNaN(timestamp)) {
+      return null;
+    }
+    return timestamp + 24 * 60 * 60 * 1000 - 1;
+  }, [dueTo]);
+
+  const hasRangeError =
+    dueFromTimestamp !== null &&
+    dueToTimestamp !== null &&
+    dueFromTimestamp > dueToTimestamp;
+
+  const hasActiveFilters =
+    Boolean(normalizedQuery) ||
+    priorityFilter !== "all" ||
+    Boolean(dueFrom) ||
+    Boolean(dueTo);
+
+  const resetFilters = () => {
+    setQuery("");
+    setPriorityFilter("all");
+    setDueFrom("");
+    setDueTo("");
+  };
+
+  const filteredTasks = useMemo(() => {
+    if (hasRangeError) {
+      return [];
+    }
+
+    return tasks.filter((task) => {
+      if (normalizedQuery && !matchesQuery(task, normalizedQuery)) {
+        return false;
+      }
+      if (priorityFilter !== "all" && task.priority !== priorityFilter) {
+        return false;
+      }
+      if (dueFromTimestamp !== null || dueToTimestamp !== null) {
+        if (!task.dueDate) {
+          return false;
+        }
+        const due = toTimestamp(task.dueDate);
+        if (due === null) {
+          return false;
+        }
+        if (dueFromTimestamp !== null && due < dueFromTimestamp) {
+          return false;
+        }
+        if (dueToTimestamp !== null && due > dueToTimestamp) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [
+    tasks,
+    normalizedQuery,
+    priorityFilter,
+    dueFromTimestamp,
+    dueToTimestamp,
+    hasRangeError,
+  ]);
+
+  const fieldLabelClass =
+    "text-xs font-semibold uppercase tracking-widest text-[#ad7a46]";
+  const inputBaseClass =
+    "w-full rounded-full border border-[#ead8c4] bg-white px-4 py-2 text-sm text-[#3d3128] placeholder:text-[#c8b5a2] focus:border-[#ad7a46] focus:outline-none focus:ring-2 focus:ring-[#ead8c4]";
+  const dateInputClass =
+    "w-full rounded-full border border-[#ead8c4] bg-white px-3 py-2 text-sm text-[#3d3128] focus:border-[#ad7a46] focus:outline-none focus:ring-2 focus:ring-[#ead8c4]";
 
   const renderDueDateBadge = (task: Task) => {
     if (!task.dueDate) {
@@ -125,32 +207,76 @@ export const TasksTable = ({ tasks }: TasksTableProps) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <label className="relative flex-1 min-w-[240px] md:min-w-[280px]">
-            <span className="sr-only">検索キーワード</span>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-1 flex-wrap items-end gap-3">
+          <label className="flex min-w-[220px] flex-1 flex-col gap-1 md:min-w-[260px]">
+            <span className={fieldLabelClass}>キーワード</span>
             <input
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="タスク名・PJ名・担当者で検索"
-              className="w-full rounded-full border border-[#ead8c4] bg-white px-4 py-2 text-sm text-[#3d3128] placeholder:text-[#c8b5a2] focus:border-[#ad7a46] focus:outline-none focus:ring-2 focus:ring-[#ead8c4]"
+              placeholder="タスク名・PJ名・担当者"
+              className={inputBaseClass}
             />
           </label>
-          {query && (
+          <label className="flex w-full max-w-[160px] flex-col gap-1">
+            <span className={fieldLabelClass}>優先度</span>
+            <select
+              value={priorityFilter}
+              onChange={(event) =>
+                setPriorityFilter(event.target.value as "all" | Task["priority"])
+              }
+              className={inputBaseClass}
+            >
+              <option value="all">すべて</option>
+              {PRIORITY_FILTER_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-1 flex-wrap items-end gap-3">
+            <label className="flex min-w-[160px] flex-col gap-1">
+              <span className={fieldLabelClass}>期限(開始)</span>
+              <input
+                type="date"
+                value={dueFrom}
+                onChange={(event) => setDueFrom(event.target.value)}
+                className={dateInputClass}
+              />
+            </label>
+            <label className="flex min-w-[160px] flex-col gap-1">
+              <span className={fieldLabelClass}>期限(終了)</span>
+              <input
+                type="date"
+                value={dueTo}
+                onChange={(event) => setDueTo(event.target.value)}
+                className={dateInputClass}
+              />
+            </label>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-2 text-xs text-[#7f6b5a]">
+          <div>
+            表示中 {filteredTasks.length} 件 / 全体 {tasks.length} 件
+          </div>
+          {hasActiveFilters && (
             <button
               type="button"
-              onClick={() => setQuery("")}
+              onClick={resetFilters}
               className="rounded-full border border-[#ead8c4] px-3 py-2 text-xs font-semibold text-[#ad7a46] transition hover:bg-[#fff4da]"
             >
-              クリア
+              条件をリセット
             </button>
           )}
         </div>
-        <div className="text-xs text-[#7f6b5a]">
-          表示中 {filteredTasks.length} 件 / 全体 {tasks.length} 件
-        </div>
       </div>
+      {hasRangeError && (
+        <p className="text-xs font-semibold text-[#c04747]">
+          期限(開始)は期限(終了)より前の日付を選択してください。
+        </p>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-dashed border-[#ead8c4] bg-[#fffaf5]">
         <table className="min-w-full divide-y divide-[#ead8c4] text-sm">
