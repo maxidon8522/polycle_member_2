@@ -25,6 +25,15 @@ const truncate = (value: string, maxLength = PREVIEW_LENGTH): string => {
   return `${graphemes.slice(0, maxLength).join("")}…`;
 };
 
+const formatDateLabel = (isoDate: string): string => {
+  if (!isoDate) return "—";
+  const match = isoDate.match(/^\d{4}-(\d{2}-\d{2})$/);
+  if (match) {
+    return match[1];
+  }
+  return isoDate;
+};
+
 const parseSatisfactionScore = (value: string): number | null => {
   if (!value) return null;
   const match = value.match(/-?\d+(?:\.\d+)?/);
@@ -267,7 +276,7 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-dashed border-[#ead8c4] bg-[#fffaf5]">
+      <div className="relative overflow-visible rounded-xl border border-dashed border-[#ead8c4] bg-[#fffaf5]">
         <table className="min-w-full divide-y divide-[#ead8c4] text-sm">
           <thead className="bg-[#f9efe3] text-left text-xs uppercase tracking-wide text-[#ad7a46]">
             <tr>
@@ -304,7 +313,7 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
                       href={`/daily-reports/${report.reportId}`}
                       className="text-[#ad7a46] underline-offset-4 hover:underline"
                     >
-                      {renderPreview(report.date)}
+                      {formatDateLabel(report.date)}
                     </Link>
                   </td>
                   <td className="px-4 py-3">{report.userName}</td>
@@ -331,7 +340,7 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
                       <div className="relative group/field">
                         <span className="block">{renderPreview(value)}</span>
                         {value && (
-                          <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 hidden w-[320px] rounded-xl border border-[#ead8c4] bg-white p-4 text-xs text-[#3d3128] shadow-lg group-hover/field:block">
+                          <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-[320px] rounded-xl border border-[#ead8c4] bg-white p-4 text-xs text-[#3d3128] shadow-xl group-hover/field:block">
                             <div className="font-semibold text-[#ad7a46]">
                               {label}
                             </div>
@@ -349,7 +358,7 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
                         {renderTagsPreview(report.tags)}
                       </span>
                       {report.tags.length > 0 && (
-                        <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 hidden w-[320px] rounded-xl border border-[#ead8c4] bg-white p-4 text-xs text-[#3d3128] shadow-lg group-hover/field:block">
+                        <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-[320px] rounded-xl border border-[#ead8c4] bg-white p-4 text-xs text-[#3d3128] shadow-xl group-hover/field:block">
                           <div className="font-semibold text-[#ad7a46]">
                             タグ
                           </div>
