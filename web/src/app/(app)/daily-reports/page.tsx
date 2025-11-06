@@ -2,10 +2,7 @@ import Link from "next/link";
 import { unstable_noStore as noStore } from "next/cache";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
-import { DailyReportsFilter } from "@/components/daily-reports/daily-reports-filter";
 import { listDailyReports } from "@/server/repositories/daily-reports-repository";
-import { env } from "@/config/env";
-import { DEPARTMENT_OF_USER } from "@/config/departments";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -14,76 +11,9 @@ type PageProps = {
   searchParams?: Record<string, string | string[] | undefined>;
 };
 
-const parseTagsParam = (
-  value: string | string[] | undefined,
-): string[] => {
-  if (!value) return [];
-  if (Array.isArray(value)) {
-    return value
-      .flatMap((entry) => entry.split(","))
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-};
-
-const humanizeSlug = (slug: string) =>
-  slug
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-
-const normalizeText = (value?: string | null) =>
-  typeof value === "string"
-    ? value
-        .normalize("NFKC")
-        .trim()
-        .toLowerCase()
-    : "";
-
-const matchesUser = (reportSlug: string, userFilter?: string) => {
-  if (!userFilter) return true;
-  return normalizeText(reportSlug) === normalizeText(userFilter);
-};
-
-const matchesChannel = (channelId: string | undefined, filter?: string) => {
-  if (!filter) return true;
-  return normalizeText(channelId ?? "") === normalizeText(filter);
-};
-
-const matchesKeyword = (fields: string[], keyword?: string) => {
-  const normalizedKeyword = normalizeText(keyword);
-  if (!normalizedKeyword) return true;
-  const haystack = fields.map((field) => normalizeText(field)).join(" ");
-  return haystack.includes(normalizedKeyword);
-};
-
-const matchesTags = (reportTags: string[], tagFilters: string[]) => {
-  if (tagFilters.length === 0) return true;
-  const normalizedTags = reportTags
-    .map((tag) => normalizeText(tag))
-    .filter(Boolean);
-  return tagFilters
-    .map((tag) => normalizeText(tag))
-    .filter(Boolean)
-    .every((tag) => normalizedTags.includes(tag));
-};
-
 export default async function DailyReportsPage({ searchParams }: PageProps) {
   noStore();
 
-  const userFilter =
-    typeof searchParams?.user === "string" ? searchParams.user : undefined;
-  const channelFilter =
-    typeof searchParams?.channel === "string"
-      ? searchParams.channel
-      : undefined;
-  const keywordFilter =
-    typeof searchParams?.q === "string" ? searchParams.q : undefined;
-  const tagsFilter = parseTagsParam(searchParams?.tags);
   const weekStart =
     typeof searchParams?.weekStart === "string"
       ? searchParams.weekStart
@@ -93,86 +23,13 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
       ? searchParams.weekEnd
       : undefined;
 
-  const trimmedKeyword =
-    keywordFilter && keywordFilter.trim().length > 0
-      ? keywordFilter.trim()
-      : undefined;
-
   const reports = await listDailyReports({
     weekStart,
     weekEnd,
   });
 
-  const normalizedTagFilters = tagsFilter
-    .map((tag) => normalizeText(tag))
-    .filter(Boolean);
-
-  const filteredReports = reports.filter((report) =>
-    matchesUser(report.userSlug, userFilter) &&
-    matchesChannel(report.channelId, channelFilter) &&
-    matchesKeyword(
-      [
-        report.satisfactionToday,
-        report.doneToday,
-        report.goodMoreBackground,
-        report.moreNext,
-        report.todoTomorrow,
-        report.wishTomorrow,
-        report.personalNews,
-        report.tags.join(" "),
-      ],
-      trimmedKeyword,
-    ) &&
-    matchesTags(report.tags, normalizedTagFilters),
-  );
-
-  const fallbackUserPairs = Object.keys(DEPARTMENT_OF_USER).map((slug) => [
-    slug,
-    humanizeSlug(slug),
-  ] as const);
-  const userPairs = new Map<string, string>(fallbackUserPairs);
-  for (const report of reports) {
-    userPairs.set(
-      report.userSlug,
-      report.userName || humanizeSlug(report.userSlug),
-    );
-  }
-  if (userFilter && !userPairs.has(userFilter)) {
-    userPairs.set(userFilter, humanizeSlug(userFilter));
-  }
-  const userOptions = Array.from(userPairs.entries())
-    .map(([value, label]) => ({ value, label }))
-    .sort((a, b) => a.label.localeCompare(b.label, "ja"));
-
-  const defaultChannelId = env.server.SLACK_DAILY_REPORT_CHANNEL_ID.trim();
-  const channelPairs = new Map<string, string>();
-  if (defaultChannelId) {
-    channelPairs.set(defaultChannelId, defaultChannelId);
-  }
-  for (const report of reports) {
-    if (report.channelId) {
-      channelPairs.set(report.channelId, report.channelId);
-    }
-  }
-  if (channelFilter && !channelPairs.has(channelFilter)) {
-    channelPairs.set(channelFilter, channelFilter);
-  }
-  const channelOptions = Array.from(channelPairs.entries())
-    .map(([value, label]) => ({ value, label }))
-    .sort((a, b) => a.label.localeCompare(b.label, "ja"));
-
-  const tagOptions = Array.from(
-    new Set(reports.flatMap((report) => report.tags)),
-  )
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b, "ja"));
-
-  const filteredCount = filteredReports.length;
   const totalCount = reports.length;
-  const footerText =
-    filteredCount === totalCount
-      ? `取得件数: ${filteredCount}`
-      : `取得件数: ${filteredCount} / 総数 ${totalCount}`;
+  const footerText = `取得件数: ${totalCount}`;
 
   return (
     <div className="space-y-6">
@@ -182,7 +39,7 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
             デイリーレポート
           </h1>
           <p className="mt-1 text-sm text-[#7f6b5a]">
-            今週のDRを既定表示し、週次ナビゲーションと絞り込みを備えます。
+            今週のDRを既定表示し、週次ナビゲーションを提供します。
           </p>
         </div>
         <Link
@@ -192,23 +49,6 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
           DRを投稿
         </Link>
       </div>
-
-      <Card
-        title="フィルタ"
-        description="ユーザー / チャンネル / キーワード / タグを組み合わせて絞り込みできます。"
-      >
-        <DailyReportsFilter
-          users={userOptions}
-          channels={channelOptions}
-          tags={tagOptions}
-          selected={{
-            user: userFilter,
-            channel: channelFilter,
-            keyword: keywordFilter,
-            tags: tagsFilter,
-          }}
-        />
-      </Card>
 
       <Card
         title="今週の一覧"
@@ -228,7 +68,7 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f1e6d8] bg-[#fffdf9] text-[#5b4c40]">
-              {filteredReports.length === 0 ? (
+              {reports.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -238,7 +78,7 @@ export default async function DailyReportsPage({ searchParams }: PageProps) {
                   </td>
                 </tr>
               ) : (
-                filteredReports.map((report) => (
+                reports.map((report) => (
                   <tr
                     key={report.reportId}
                     className="group transition-colors duration-200 hover:bg-[#f9efe3]/60"

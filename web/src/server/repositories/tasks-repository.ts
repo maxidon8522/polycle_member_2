@@ -5,21 +5,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { Task, TaskHistoryEvent, TaskUpsertInput } from "@/types";
-import {
-  appendTaskHistoryEvent,
-  fetchTasks,
-  upsertTask,
-} from "@/lib/sheets/tasks";
-
-export interface TaskListFilters {
-  assignee?: string;
-  status?: Task["status"];
-  priority?: Task["priority"];
-  dueBefore?: string;
-  projectName?: string;
-  searchTerm?: string;
-  category?: string;
-}
+import { appendTaskHistoryEvent, fetchTasks, upsertTask } from "@/lib/sheets/tasks";
 
 export type TaskHistoryEventInput = {
   id?: string;
@@ -36,104 +22,19 @@ const PRIORITY_WEIGHT: Record<Task["priority"], number> = {
   低: 2,
 };
 
-const normalize = (value?: string | null): string =>
-  typeof value === "string" ? value.trim().toLowerCase() : "";
-
-const parseDate = (value?: string | null): number | null => {
-  const normalized = value ? value.trim() : "";
-  if (!normalized) {
-    return null;
-  }
-  const timestamp = Date.parse(normalized);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
 const compareDueDate = (left?: string, right?: string): number => {
-  const leftValue = parseDate(left);
-  const rightValue = parseDate(right);
+  const leftParsed = Date.parse(left ?? "");
+  const rightParsed = Date.parse(right ?? "");
+  const leftValue = Number.isNaN(leftParsed) ? null : leftParsed;
+  const rightValue = Number.isNaN(rightParsed) ? null : rightParsed;
   if (leftValue === null && rightValue === null) return 0;
   if (leftValue === null) return 1;
   if (rightValue === null) return -1;
   return leftValue - rightValue;
 };
 
-const matchesSearchTerm = (task: Task, term: string): boolean => {
-  const normalizedTerm = normalize(term);
-  if (!normalizedTerm) {
-    return true;
-  }
-
-  const haystack = [
-    task.title,
-    task.notes ?? "",
-    task.projectName,
-    task.assigneeName,
-    task.detailUrl ?? "",
-    (task.tags ?? []).join(" "),
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  return haystack.includes(normalizedTerm);
-};
-
-export const listTasks = async (
-  filters: TaskListFilters = {},
-): Promise<Task[]> => {
-  const tasks = await fetchTasks();
-  const assigneeFilter = normalize(filters.assignee);
-  const projectFilter = normalize(filters.projectName);
-  const dueBeforeValue = parseDate(filters.dueBefore);
-  const statusFilter = filters.status;
-  const priorityFilter = filters.priority;
-  const searchTerm = normalize(filters.searchTerm);
-  const categoryFilter = normalize(filters.category);
-
-  const filtered = tasks.filter((task) => {
-    if (assigneeFilter) {
-      const matchesAssignee =
-        normalize(task.assigneeName).includes(assigneeFilter);
-      if (!matchesAssignee) {
-        return false;
-      }
-    }
-
-    if (statusFilter && task.status !== statusFilter) {
-      return false;
-    }
-
-    if (priorityFilter && task.priority !== priorityFilter) {
-      return false;
-    }
-
-    if (projectFilter && !normalize(task.projectName).includes(projectFilter)) {
-      return false;
-    }
-
-    if (categoryFilter) {
-      const tagMatches = (task.tags ?? [])
-        .map((tag) => normalize(tag))
-        .includes(categoryFilter);
-      if (!tagMatches) {
-        return false;
-      }
-    }
-
-    if (dueBeforeValue !== null) {
-      const taskDue = parseDate(task.dueDate);
-      if (taskDue === null || taskDue > dueBeforeValue) {
-        return false;
-      }
-    }
-
-    if (searchTerm && !matchesSearchTerm(task, searchTerm)) {
-      return false;
-    }
-
-    return true;
-  });
-
-  return filtered.sort((a, b) => {
+const sortTasks = (tasks: Task[]): Task[] => {
+  return tasks.slice().sort((a, b) => {
     const dueCompare = compareDueDate(a.dueDate, b.dueDate);
     if (dueCompare !== 0) {
       return dueCompare;
@@ -146,13 +47,19 @@ export const listTasks = async (
     }
 
     const updatedDiff =
-      (parseDate(b.updatedAt) ?? 0) - (parseDate(a.updatedAt) ?? 0);
-    if (updatedDiff !== 0) {
+      (Date.parse(b.updatedAt ?? "") || 0) -
+      (Date.parse(a.updatedAt ?? "") || 0);
+    if (updatedDiff !== 0 && !Number.isNaN(updatedDiff)) {
       return updatedDiff;
     }
 
     return a.taskId.localeCompare(b.taskId);
   });
+};
+
+export const listTasks = async (): Promise<Task[]> => {
+  const tasks = await fetchTasks();
+  return sortTasks(tasks);
 };
 
 const ensureHistoryEvent = (

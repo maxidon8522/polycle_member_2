@@ -4,8 +4,7 @@ import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { listTasks } from "@/server/repositories/tasks-repository";
 import { TasksGantt } from "@/components/tasks/tasks-gantt";
-import { TasksFilter } from "@/components/tasks/tasks-filter";
-import type { Task, TaskPriority, TaskStatus } from "@/types";
+import type { Task } from "@/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,17 +14,6 @@ const toTimestamp = (value?: string | null): number | null => {
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
 };
-
-const normalizeText = (value?: string | null): string =>
-  typeof value === "string"
-    ? value
-        .normalize("NFKC")
-        .replace(/\u200B/g, "")
-        .replace(/\+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase()
-    : "";
 
 const buildTaskSummary = (tasks: Task[]) => {
   const now = Date.now();
@@ -46,167 +34,16 @@ const buildTaskSummary = (tasks: Task[]) => {
   return { now, overdueCount, dueSoonCount };
 };
 
-type PageProps = {
-  searchParams?: Record<string, string | string[] | undefined>;
-};
-
-const TASK_STATUSES: TaskStatus[] = [
-  "未着手",
-  "進行中",
-  "レビュー待ち",
-  "完了",
-  "保留",
-  "棄却",
-];
-
-const TASK_PRIORITIES: TaskPriority[] = ["高", "中", "低"];
-
-const getSingleParam = (value?: string | string[]): string | undefined => {
-  const raw = Array.isArray(value) ? value[0] : value;
-  if (typeof raw !== "string") {
-    return undefined;
-  }
-  const plusAsSpace = raw.replace(/\+/g, "%20");
-  try {
-    return decodeURIComponent(plusAsSpace);
-  } catch {
-    return plusAsSpace.replace(/%20/g, " ");
-  }
-};
-
-const isTaskStatus = (value?: string): value is TaskStatus => {
-  if (!value) return false;
-  return TASK_STATUSES.includes(value as TaskStatus);
-};
-
-const isTaskPriority = (value?: string): value is TaskPriority => {
-  if (!value) return false;
-  return TASK_PRIORITIES.includes(value as TaskPriority);
-};
-
-const applyTaskFilters = (
-  tasks: Task[],
-  filters: {
-    assignee?: string;
-    status?: TaskStatus;
-    priority?: TaskPriority;
-    projectName?: string;
-    dueBefore?: string;
-    category?: string;
-  },
-) => {
-  const assigneeFilter = normalizeText(filters.assignee);
-  const projectFilter = normalizeText(filters.projectName);
-  const categoryFilter = normalizeText(filters.category);
-  const statusFilter = filters.status;
-  const priorityFilter = filters.priority;
-  const dueBeforeValue = normalizeText(filters.dueBefore);
-
-  return tasks.filter((task) => {
-    if (assigneeFilter) {
-      if (normalizeText(task.assigneeName) !== assigneeFilter) {
-        return false;
-      }
-    }
-
-    if (statusFilter && task.status !== statusFilter) {
-      return false;
-    }
-
-    if (priorityFilter && task.priority !== priorityFilter) {
-      return false;
-    }
-
-    if (projectFilter) {
-      if (normalizeText(task.projectName) !== projectFilter) {
-        return false;
-      }
-    }
-
-    if (categoryFilter) {
-      const tags = task.tags?.map((tag) => normalizeText(tag)) ?? [];
-      if (!tags.includes(categoryFilter)) {
-        return false;
-      }
-    }
-
-    if (dueBeforeValue) {
-      const dueDate = normalizeText(task.dueDate?.slice(0, 10) ?? task.dueDate);
-      if (dueDate !== dueBeforeValue) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-};
-
-export default async function TasksPage({ searchParams }: PageProps) {
+export default async function TasksPage() {
   noStore();
 
-  const assigneeFilter = getSingleParam(searchParams?.assignee);
-  const statusParam = getSingleParam(searchParams?.status);
-  const statusFilter = isTaskStatus(statusParam) ? statusParam : undefined;
-  const dueBeforeFilter = getSingleParam(searchParams?.dueBefore);
-  const priorityParam = getSingleParam(searchParams?.priority);
-  const priorityFilter = isTaskPriority(priorityParam)
-    ? priorityParam
-    : undefined;
-  const categoryFilter = getSingleParam(searchParams?.category);
-  const projectFilter = getSingleParam(searchParams?.project);
+  const tasks = await listTasks();
 
-  const allTasks = await listTasks();
-
-  const filteredTasks = applyTaskFilters(allTasks, {
-    assignee: assigneeFilter,
-    status: statusFilter,
-    priority: priorityFilter,
-    projectName: projectFilter,
-    dueBefore: dueBeforeFilter,
-    category: categoryFilter,
-  });
-
-  const { now, overdueCount, dueSoonCount } = buildTaskSummary(filteredTasks);
-
-  const totalCount = allTasks.length;
-  const filteredCount = filteredTasks.length;
-
-  const assigneeOptionSet = new Set(
-    allTasks.map((task) => task.assigneeName).filter(Boolean),
-  );
-  if (assigneeFilter) {
-    assigneeOptionSet.add(assigneeFilter);
-  }
-  const assigneeOptions = Array.from(assigneeOptionSet).sort((a, b) =>
-    a.localeCompare(b, "ja"),
-  );
-
-  const projectOptionSet = new Set(
-    allTasks.map((task) => task.projectName).filter(Boolean),
-  );
-  if (projectFilter) {
-    projectOptionSet.add(projectFilter);
-  }
-  const projectOptions = Array.from(projectOptionSet).sort((a, b) =>
-    a.localeCompare(b, "ja"),
-  );
-
-  const categoryOptionSet = new Set(
-    allTasks
-      .flatMap((task) => task.tags ?? [])
-      .filter(Boolean),
-  );
-  if (categoryFilter) {
-    categoryOptionSet.add(categoryFilter);
-  }
-  const categoryOptions = Array.from(categoryOptionSet).sort((a, b) =>
-    a.localeCompare(b, "ja"),
-  );
+  const { now, overdueCount, dueSoonCount } = buildTaskSummary(tasks);
+  const totalCount = tasks.length;
 
   const footerTextParts = [
-    filteredCount === totalCount
-      ? `取得件数: ${filteredCount}`
-      : `取得件数: ${filteredCount} / 総数 ${totalCount}`,
+    `取得件数: ${totalCount}`,
     `期限超過: ${overdueCount}`,
     `3日以内の期限: ${dueSoonCount}`,
   ];
@@ -216,17 +53,8 @@ export default async function TasksPage({ searchParams }: PageProps) {
       <pre className="whitespace-pre-wrap rounded-lg bg-[#fffaf5] p-3 text-xs text-[#7f6b5a]">
         {JSON.stringify(
           {
-            parsedFilters: {
-              assignee: assigneeFilter,
-              status: statusFilter ?? null,
-              priority: priorityFilter ?? null,
-              dueBefore: dueBeforeFilter ?? null,
-              category: categoryFilter || null,
-              project: projectFilter || null,
-            },
             counts: {
               total: totalCount,
-              filtered: filteredCount,
             },
           },
           null,
@@ -241,7 +69,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-semibold text-[#3d3128]">タスク</h1>
           <p className="mt-1 text-sm text-[#7f6b5a]">
-            担当者 / 状態 / 重要度などでフィルタリングし、期限を意識したオペレーションを支援します。
+            Google Sheets上のタスクを一覧化し、期限や状態を確認できます。
           </p>
         </div>
         <Link
@@ -251,25 +79,6 @@ export default async function TasksPage({ searchParams }: PageProps) {
           新規タスク
         </Link>
       </div>
-
-      <Card
-        title="フィルタ / 並び替え"
-        description="担当者や期限、カテゴリを組み合わせてタスクを絞り込みます。"
-      >
-        <TasksFilter
-          assignees={assigneeOptions}
-          projects={projectOptions}
-          categories={categoryOptions}
-          selected={{
-            assignee: assigneeFilter,
-            status: statusFilter,
-            dueBefore: dueBeforeFilter,
-            priority: priorityFilter,
-            category: categoryFilter,
-            project: projectFilter,
-          }}
-        />
-      </Card>
 
       <Card
         title="タスク一覧"
@@ -290,7 +99,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f1e6d8] bg-[#fffdf9] text-[#5b4c40]">
-              {filteredTasks.length === 0 ? (
+              {tasks.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -300,7 +109,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
                   </td>
                 </tr>
               ) : (
-                filteredTasks.map((task) => (
+                tasks.map((task) => (
                   <tr
                     key={task.taskId}
                     className="group transition-colors duration-200 hover:bg-[#f9efe3]/60"
@@ -398,7 +207,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
         title="ガントチャート"
         description="同じタスクデータを開始日・期限で可視化します。表示対象は開始日または期限が設定されているタスクのみです。"
       >
-        <TasksGantt tasks={filteredTasks} />
+        <TasksGantt tasks={tasks} />
       </Card>
       {debugInfo}
     </div>

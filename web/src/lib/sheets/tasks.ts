@@ -64,10 +64,70 @@ const normalizeCell = (value?: string): string =>
     ? value
         .normalize("NFKC")
         .replace(/\u200B/g, "")
+        .replace(/\u00a0/g, " ")
         .replace(/\+/g, " ")
         .replace(/\s+/g, " ")
         .trim()
     : "";
+
+const SHEETS_EPOCH_MS = Date.UTC(1899, 11, 30);
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const isNumericString = (value: string): boolean => {
+  return /^[+-]?\d+(\.\d+)?$/.test(value);
+};
+
+const serialNumberToIsoDate = (serial: number): string | null => {
+  if (!Number.isFinite(serial)) {
+    return null;
+  }
+  const milliseconds = Math.round(serial * MILLISECONDS_PER_DAY);
+  const timestamp = SHEETS_EPOCH_MS + milliseconds;
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toISOString().slice(0, 10);
+};
+
+const normalizeDateCell = (value?: string): string => {
+  const normalized = normalizeCell(value);
+  if (!normalized) {
+    return "";
+  }
+
+  if (isNumericString(normalized)) {
+    const serial = Number(normalized);
+    const iso = serialNumberToIsoDate(serial);
+    if (iso) {
+      return iso;
+    }
+  }
+
+  const candidate = normalized
+    .replace(/[./]/g, "-")
+    .replace(/T\s+/i, "T")
+    .trim();
+
+  const isoCompatible =
+    candidate.includes(" ") && !candidate.includes("T")
+      ? candidate.replace(" ", "T")
+      : candidate;
+
+  const parsed = Date.parse(isoCompatible);
+  if (!Number.isNaN(parsed)) {
+    return new Date(parsed).toISOString().slice(0, 10);
+  }
+
+  if (candidate.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(candidate)) {
+    return candidate;
+  }
+
+  return candidate;
+};
 
 const mapRowToTaskHistory = (
   row: string[],
@@ -343,6 +403,11 @@ export const fetchTasks = async (): Promise<Task[]> => {
       return normalized || undefined;
     };
 
+    const normalizeOptionalDate = (value?: string) => {
+      const normalizedValue = normalizeDateCell(value);
+      return normalizedValue || undefined;
+    };
+
     normalizedTasks.push({
       ...task,
       taskId: normalizeCell(task.taskId),
@@ -351,9 +416,9 @@ export const fetchTasks = async (): Promise<Task[]> => {
       projectName: normalizeCell(task.projectName),
       status: normalizeCell(task.status) as Task["status"],
       priority: normalizeCell(task.priority) as Task["priority"],
-      dueDate: normalizeOptional(task.dueDate),
-      startDate: normalizeOptional(task.startDate),
-      doneDate: normalizeOptional(task.doneDate),
+      dueDate: normalizeOptionalDate(task.dueDate),
+      startDate: normalizeOptionalDate(task.startDate),
+      doneDate: normalizeOptionalDate(task.doneDate),
       detailUrl: task.detailUrl?.trim() || undefined,
       notes: normalizeOptional(task.notes),
       tags: (task.tags ?? [])

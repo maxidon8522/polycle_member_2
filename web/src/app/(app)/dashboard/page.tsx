@@ -198,7 +198,7 @@ export default async function DashboardPage() {
   const [reportsRaw, weeklySatisfactionRaw, tasks] = await Promise.all([
     listDailyReports({}),
     computeWeeklySatisfaction({}),
-    listTasks({}),
+    listTasks(),
   ]);
 
   const currentWeekStart = getWeekStart(new Date());
@@ -572,7 +572,7 @@ export default async function DashboardPage() {
 
         <Card
           title="期限が近いタスク"
-          description="期限切れ / 1週間以内のタスクを優先表示します。詳細更新はタスク画面から行えます。"
+          description="期限切れ / 1週間以内のタスクを優先表示しています"
           footer={`表示中: ${highlightedTasks.length}件 | 期限超過: ${overdueTasks.length}`}
         >
           {highlightedTasks.length === 0 ? (

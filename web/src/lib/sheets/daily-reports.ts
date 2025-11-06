@@ -426,12 +426,8 @@ const toColumnRange = (
 };
 
 export interface DailyReportQueryOptions {
-  userSlug?: string;
   weekStart?: string;
   weekEnd?: string;
-  searchTerm?: string;
-  tags?: string[];
-  channelId?: string;
 }
 
 export const findRowIndexByDateAndSlug = async (
@@ -684,38 +680,5 @@ export const fetchDailyReports = async (
     }, new Map<string, DailyReport>()).values(),
   );
 
-  return deduplicated
-    .filter((report) => {
-      if (options.userSlug) {
-        return normalizeSlug(report.userSlug) === normalizeSlug(options.userSlug);
-      }
-      return true;
-    })
-    .filter((report) => {
-      if (!options.searchTerm) return true;
-      const haystack = [
-        report.satisfactionToday,
-        report.doneToday,
-        report.goodMoreBackground,
-        report.moreNext,
-        report.todoTomorrow,
-        report.wishTomorrow,
-        report.personalNews,
-        report.tags.join(" "),
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(options.searchTerm.toLowerCase());
-    })
-    .filter((report) => {
-      if (!options.tags || options.tags.length === 0) return true;
-      const normalizedTags = report.tags.map((tag) => tag.toLowerCase());
-      return options.tags.every((tag) =>
-        normalizedTags.includes(tag.toLowerCase()),
-      );
-    })
-    .filter((report) => {
-      if (!options.channelId) return true;
-      return (report.channelId ?? "").trim() === options.channelId.trim();
-    });
+  return deduplicated;
 };
