@@ -310,7 +310,7 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
                 >
                   <td className="px-4 py-3 font-medium text-[#3d3128]">
                     <Link
-                      href={`/daily-reports/${report.reportId}`}
+                      href={`/daily-reports/date/${report.date}`}
                       className="text-[#ad7a46] underline-offset-4 hover:underline"
                     >
                       {formatDateLabel(report.date)}
@@ -340,7 +340,7 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
                       <div className="relative group/field">
                         <span className="block">{renderPreview(value)}</span>
                         {value && (
-                          <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-[320px] rounded-xl border border-[#ead8c4] bg-white p-4 text-xs text-[#3d3128] shadow-xl group-hover/field:block">
+                          <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-[320px] rounded-xl border border-[#ead8c4] bg-white p-4 text-sm text-[#3d3128] shadow-xl group-hover/field:block">
                             <div className="font-semibold text-[#ad7a46]">
                               {label}
                             </div>
@@ -358,7 +358,7 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
                         {renderTagsPreview(report.tags)}
                       </span>
                       {report.tags.length > 0 && (
-                        <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-[320px] rounded-xl border border-[#ead8c4] bg-white p-4 text-xs text-[#3d3128] shadow-xl group-hover/field:block">
+                        <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-[320px] rounded-xl border border-[#ead8c4] bg-white p-4 text-sm text-[#3d3128] shadow-xl group-hover/field:block">
                           <div className="font-semibold text-[#ad7a46]">
                             タグ
                           </div>
