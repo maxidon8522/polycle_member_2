@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { addDays, formatISO, parseISO } from "date-fns";
+import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { listDailyReports } from "@/server/repositories/daily-reports-repository";
@@ -30,7 +31,7 @@ const formatLabel = (label: string) => label;
 const FIELD_DEFINITIONS: Array<{
   key: keyof DailyReport;
   label: string;
-  render?: (value: DailyReport[keyof DailyReport]) => string | JSX.Element;
+  render?: (value: DailyReport[keyof DailyReport]) => ReactNode;
 }> = [
   { key: "satisfactionToday", label: "満足度" },
   { key: "doneToday", label: "Done" },
@@ -70,8 +71,8 @@ const FIELD_DEFINITIONS: Array<{
 const renderFieldValue = (
   report: DailyReport,
   key: keyof DailyReport,
-  customRender?: (value: DailyReport[keyof DailyReport]) => string | JSX.Element,
-) => {
+  customRender?: (value: DailyReport[keyof DailyReport]) => ReactNode,
+): ReactNode => {
   const value = report[key];
   if (customRender) {
     return customRender(value);
