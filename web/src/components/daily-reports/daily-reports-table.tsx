@@ -77,44 +77,23 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
     return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
   }, [reports]);
 
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [selectedDate, setSelectedDate] = useState("");
   const [userFilter, setUserFilter] = useState<string>("all");
   const [satisfactionFilter, setSatisfactionFilter] =
     useState<SatisfactionFilter>("all");
   const [tagFilter, setTagFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
 
-  const dateFromTimestamp = useMemo(() => {
-    if (!dateFrom) return null;
-    const parsed = Date.parse(dateFrom);
-    return Number.isNaN(parsed) ? null : parsed;
-  }, [dateFrom]);
-
-  const dateToTimestamp = useMemo(() => {
-    if (!dateTo) return null;
-    const parsed = Date.parse(dateTo);
-    if (Number.isNaN(parsed)) return null;
-    return parsed + 24 * 60 * 60 * 1000 - 1;
-  }, [dateTo]);
-
-  const hasDateRangeError =
-    dateFromTimestamp !== null &&
-    dateToTimestamp !== null &&
-    dateFromTimestamp > dateToTimestamp;
-
   const normalizedTagFilter = normalize(tagFilter);
   const hasActiveFilters =
-    Boolean(dateFrom) ||
-    Boolean(dateTo) ||
+    Boolean(selectedDate) ||
     userFilter !== "all" ||
     satisfactionFilter !== "all" ||
     Boolean(normalizedTagFilter) ||
     departmentFilter !== "all";
 
   const resetFilters = () => {
-    setDateFrom("");
-    setDateTo("");
+    setSelectedDate("");
     setUserFilter("all");
     setSatisfactionFilter("all");
     setTagFilter("");
@@ -122,19 +101,9 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
   };
 
   const filteredReports = useMemo(() => {
-    if (hasDateRangeError) {
-      return [];
-    }
-
     return reports.filter((report) => {
-      const reportDate = Date.parse(report.date);
-      if (!Number.isNaN(reportDate)) {
-        if (dateFromTimestamp !== null && reportDate < dateFromTimestamp) {
-          return false;
-        }
-        if (dateToTimestamp !== null && reportDate > dateToTimestamp) {
-          return false;
-        }
+      if (selectedDate && report.date !== selectedDate) {
+        return false;
       }
 
       if (userFilter !== "all" && report.userName !== userFilter) {
@@ -144,11 +113,11 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
       if (satisfactionFilter !== "all") {
         const score = parseSatisfactionScore(report.satisfactionToday);
         if (satisfactionFilter === "high") {
-          if (score === null || score < 0) {
+          if (score === null || score < 5) {
             return false;
           }
         } else if (satisfactionFilter === "low") {
-          if (score === null || score >= 0) {
+          if (score === null || score >= 5) {
             return false;
           }
         }
@@ -176,9 +145,7 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
     });
   }, [
     reports,
-    hasDateRangeError,
-    dateFromTimestamp,
-    dateToTimestamp,
+    selectedDate,
     userFilter,
     satisfactionFilter,
     normalizedTagFilter,
@@ -215,20 +182,11 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-1 flex-wrap gap-3">
           <label className="flex min-w-[160px] flex-1 flex-col gap-1">
-            <span className={labelClass}>日付(開始)</span>
+            <span className={labelClass}>日付</span>
             <input
               type="date"
-              value={dateFrom}
-              onChange={(event) => setDateFrom(event.target.value)}
-              className={inputClass}
-            />
-          </label>
-          <label className="flex min-w-[160px] flex-1 flex-col gap-1">
-            <span className={labelClass}>日付(終了)</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(event) => setDateTo(event.target.value)}
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
               className={inputClass}
             />
           </label>
@@ -257,8 +215,8 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
               className={inputClass}
             >
               <option value="all">すべて</option>
-              <option value="high">高い(0以上)</option>
-              <option value="low">低い(0未満)</option>
+              <option value="high">高い(5以上)</option>
+              <option value="low">低い(5未満)</option>
             </select>
           </label>
         </div>
@@ -305,11 +263,6 @@ export const DailyReportsTable = ({ reports }: DailyReportsTableProps) => {
         <div>
           表示中 {filteredReports.length} 件 / 全体 {reports.length} 件
         </div>
-        {hasDateRangeError && (
-          <div className="font-semibold text-[#c04747]">
-            日付(開始)は日付(終了)より前の日付を選択してください。
-          </div>
-        )}
       </div>
 
       <div className="overflow-hidden rounded-xl border border-dashed border-[#ead8c4] bg-[#fffaf5]">
